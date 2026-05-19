@@ -619,15 +619,12 @@ class MainWindow(QtWidgets.QMainWindow):
                  
     def dialog(self, s):
         dlg = QtWidgets.QMessageBox(self)
-        dlg.setIcon(QtWidgets.QMessageBox.Information)
+        dlg.setIcon(QtWidgets.QMessageBox.Icon.Information)
         dlg.setText(s)
         dlg.show()
 
     def dialog_critical(self, s):
-        dlg = QtWidgets.QMessageBox(self)
-        dlg.setText(s)
-        dlg.setIcon(QtWidgets.QMessageBox.Critical)
-        dlg.show()
+        self.custom_msg_box(QtWidgets.QMessageBox.Icon.Critical, "noScribeEdit", s, QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
 
     def _file_open(self, path):
         try:
@@ -673,12 +670,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 # get path to audio source from html:
                 tags = parser.head.getElementsByName("audio_source")
                 if (len(tags) == 0) or (not os.path.exists(tags[0].content)): # audio source moved or missing
-                    ret = QtWidgets.QMessageBox.warning(self, "noScribeEdit", 
-                                                "Audio source file not found.\n"
-                                                "Do you want to search for it?",
-                                                QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel, 
-                                                QtWidgets.QMessageBox.Ok)
-                    if ret == QtWidgets.QMessageBox.Cancel:
+                    ret = self.custom_msg_box(QtWidgets.QMessageBox.Icon.Warning, "noScribeEdit", t('editor.msg.audio_not_found'), QtWidgets.QMessageBox.StandardButton.Ok | QtWidgets.QMessageBox.StandardButton.Cancel, QtWidgets.QMessageBox.StandardButton.Ok)
+                    if ret == QtWidgets.QMessageBox.StandardButton.Cancel:
                         self.status.clearMessage()
                         return
                     else:
@@ -761,13 +754,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def file_open(self):
         if self.editor.document().isModified():
-            ret = QtWidgets.QMessageBox.warning(self, "noScribeEdit", 
-                                                t('editor.msg.modified'),
-                                                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard
-                                                | QtWidgets.QMessageBox.Cancel, QtWidgets.QMessageBox.Save)
-            if ret == QtWidgets.QMessageBox.Save:
+            ret = self.custom_msg_box(QtWidgets.QMessageBox.Icon.Warning, "noScribeEdit", t('editor.msg.modified'), QtWidgets.QMessageBox.StandardButton.Save | QtWidgets.QMessageBox.StandardButton.Discard
+                                                | QtWidgets.QMessageBox.StandardButton.Cancel, QtWidgets.QMessageBox.StandardButton.Save)
+            if ret == QtWidgets.QMessageBox.StandardButton.Save:
                 self.file_save()
-            elif ret == QtWidgets.QMessageBox.Cancel:
+            elif ret == QtWidgets.QMessageBox.StandardButton.Cancel:
                 return
             
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, t('editor.tooltip.open_file'), "", "noScribe Transcripts (*.html)")
@@ -980,12 +971,8 @@ class MainWindow(QtWidgets.QMainWindow):
         
         try:
             if not self.tmp_audio_file: # audio source moved or missing
-                ret = QtWidgets.QMessageBox.warning(self, "noScribeEdit", 
-                                            "Audio source file not found.\n"
-                                            "Do you want to search for it?",
-                                            QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel, 
-                                            QtWidgets.QMessageBox.Ok)
-                if ret == QtWidgets.QMessageBox.Cancel:
+                ret = self.custom_msg_box(QtWidgets.QMessageBox.Icon.Warning, "noScribeEdit", t('editor.msg.audio_not_found'), QtWidgets.QMessageBox.StandardButton.Ok | QtWidgets.QMessageBox.StandardButton.Cancel, QtWidgets.QMessageBox.StandardButton.Ok)
+                if ret == QtWidgets.QMessageBox.StandardButton.Cancel:
                     return
                 else:
                     if not self.open_audio_source():
@@ -998,12 +985,8 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 start, stop = decode_timestamp(ts)
             except:
-                ret = QtWidgets.QMessageBox.warning(self, "noScribeEdit", 
-                                    "No audio timestamp found for current selection.\n"
-                                    "Do you want to start from the beginning?",
-                                    QtWidgets.QMessageBox.Ok | QtWidgets.QMessageBox.Cancel, 
-                                    QtWidgets.QMessageBox.Ok)
-                if ret == QtWidgets.QMessageBox.Cancel:
+                ret = self.custom_msg_box(QtWidgets.QMessageBox.Icon.Warning, "noScribeEdit", t("editor.msg.no_timestamp_start_from_beginning"), QtWidgets.QMessageBox.StandardButton.Ok | QtWidgets.QMessageBox.StandardButton.Cancel, QtWidgets.QMessageBox.StandardButton.Ok)
+                if ret == QtWidgets.QMessageBox.StandardButton.Cancel:
                     return
                 else:
                     # move to the beginning
@@ -1115,13 +1098,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.keep_playing = False
                     
         if self.editor.document().isModified():
-            ret = QtWidgets.QMessageBox.warning(self, "noScribeEdit", 
-                                                t('editor.msg.modified'),
-                                                QtWidgets.QMessageBox.Save | QtWidgets.QMessageBox.Discard
-                                                | QtWidgets.QMessageBox.Cancel, QtWidgets.QMessageBox.Save)
-            if ret == QtWidgets.QMessageBox.Save:
+            ret = self.custom_msg_box(QtWidgets.QMessageBox.Icon.Warning, "noScribeEdit", t('editor.msg.modified'), QtWidgets.QMessageBox.StandardButton.Save | QtWidgets.QMessageBox.StandardButton.Discard
+                                                | QtWidgets.QMessageBox.StandardButton.Cancel, QtWidgets.QMessageBox.StandardButton.Save)
+            if ret == QtWidgets.QMessageBox.StandardButton.Save:
                 self.file_save()
-            elif ret == QtWidgets.QMessageBox.Cancel:
+            elif ret == QtWidgets.QMessageBox.StandardButton.Cancel:
                 event.ignore()
                 return
         
@@ -1181,18 +1162,21 @@ class MainWindow(QtWidgets.QMainWindow):
     # AI-Generated Feature: Custom Dialog Translations
     def custom_msg_box(self, icon, title, text, buttons, default_button):
         msg = QtWidgets.QMessageBox(icon, title, text, buttons, self)
-        if buttons & QtWidgets.QMessageBox.StandardButton.Save:
-            msg.setButtonText(QtWidgets.QMessageBox.StandardButton.Save, t('editor.action.save', default='Save'))
-        if buttons & QtWidgets.QMessageBox.StandardButton.Discard:
-            msg.setButtonText(QtWidgets.QMessageBox.StandardButton.Discard, t('editor.action.discard', default='Discard'))
-        if buttons & QtWidgets.QMessageBox.StandardButton.Cancel:
-            msg.setButtonText(QtWidgets.QMessageBox.StandardButton.Cancel, t('editor.action.cancel', default='Cancel'))
-        if buttons & QtWidgets.QMessageBox.StandardButton.Ok:
-            msg.setButtonText(QtWidgets.QMessageBox.StandardButton.Ok, t('editor.action.ok', default='OK'))
-        if buttons & QtWidgets.QMessageBox.StandardButton.Yes:
-            msg.setButtonText(QtWidgets.QMessageBox.StandardButton.Yes, t('editor.action.yes', default='Yes'))
-        if buttons & QtWidgets.QMessageBox.StandardButton.No:
-            msg.setButtonText(QtWidgets.QMessageBox.StandardButton.No, t('editor.action.no', default='No'))
+        
+        # Helper to map both StandardButton enum and plain int flags
+        def try_set_text(btn_flag, text_val):
+            # For PyQt6, buttons are StandardButton enums. We can bitwise AND them.
+            if int(buttons) & int(btn_flag):
+                btn = msg.button(btn_flag)
+                if btn:
+                    btn.setText(text_val)
+
+        try_set_text(QtWidgets.QMessageBox.StandardButton.Save, t('editor.action.save', default='Save'))
+        try_set_text(QtWidgets.QMessageBox.StandardButton.Discard, t('editor.action.discard', default='Discard'))
+        try_set_text(QtWidgets.QMessageBox.StandardButton.Cancel, t('editor.action.cancel', default='Cancel'))
+        try_set_text(QtWidgets.QMessageBox.StandardButton.Ok, t('editor.action.ok', default='OK'))
+        try_set_text(QtWidgets.QMessageBox.StandardButton.Yes, t('editor.action.yes', default='Yes'))
+        try_set_text(QtWidgets.QMessageBox.StandardButton.No, t('editor.action.no', default='No'))
         msg.setDefaultButton(default_button)
         return msg.exec()
 
@@ -1268,19 +1252,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
             if found_cursor.isNull():
                 # Ask if the user wants to continue searching from the top.
-                ret = QtWidgets.QMessageBox.question(
-                    self, "Find", "Reached the end of the document. Continue from the beginning?",
-                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No
-                )
+                ret = self.custom_msg_box(QtWidgets.QMessageBox.Icon.Question, "Find", t("editor.msg.reached_end"), QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
 
-                if ret == QtWidgets.QMessageBox.Yes:
+                if ret == QtWidgets.QMessageBox.StandardButton.Yes:
                     # Search from the beginning
                     start_cursor = QtGui.QTextCursor(document)
                     found_cursor = document.find(text, start_cursor, flags)
                     if found_cursor.isNull():
-                        QtWidgets.QMessageBox.information(
-                            self, "Find", "No more occurrences found."
-                        )
+                        self.custom_msg_box(QtWidgets.QMessageBox.Icon.Information, "Find", t("editor.msg.no_more_occurrences"), QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
                         return
                 else:
                     return
@@ -1468,7 +1447,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             # Provide a gentle notice when nothing was replaced anywhere
             if replacements == 0 and anchor_replacements == 0:
-                QtWidgets.QMessageBox.information(self, "Replace All", "No occurrences found to replace.")
+                self.custom_msg_box(QtWidgets.QMessageBox.Icon.Information, "Replace All", t("editor.msg.replace_all_none"), QtWidgets.QMessageBox.StandardButton.Ok, QtWidgets.QMessageBox.StandardButton.Ok)
         except Exception as e:
             self.dialog_critical(f"Error during replace all: {e}")
                 

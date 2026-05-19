@@ -2365,6 +2365,42 @@ class App(ctk.CTk):
             option_info += f'{t("label_disfluencies")} {job.disfluencies} | '
             option_info += f'{t("label_pause")} {job.pause}'
 
+            # AI-Generated Feature: Output AI Models
+            
+            # Whisper Model Extraction
+            whisper_model_disp = os.path.basename(job.whisper_model) if job.whisper_model else str(job.whisper_model)
+            if job.whisper_model and os.path.exists(job.whisper_model):
+                try:
+                    w_readme_path = os.path.join(job.whisper_model, 'README.md')
+                    if os.path.exists(w_readme_path):
+                        with open(w_readme_path, 'r', encoding='utf-8') as f:
+                            for line in f:
+                                if line.startswith("ct2-transformers-converter --model "):
+                                    parts = line.strip().split()
+                                    for p in parts:
+                                        if "/" in p and p != "ct2-transformers-converter":
+                                            whisper_model_disp = p.split("/")[-1]
+                                            break
+                                    break
+                except:
+                    pass
+            option_info += f' | {t("label_whisper_model", default="Transkriptionsmodell:")} {whisper_model_disp}'
+            
+            # Pyannote Model Extraction
+            if str(job.speaker_detection).lower() != 'none':
+                pyannote_model = "pyannote"
+                try:
+                    readme_path = os.path.join(app_dir, 'pyannote', 'README.md')
+                    if os.path.exists(readme_path):
+                        with open(readme_path, 'r', encoding='utf-8') as f:
+                            for line in f:
+                                if line.startswith("#"):
+                                    pyannote_model = "pyannote / " + line.strip('# \n').replace('`', '').strip()
+                                    break
+                except:
+                    pass
+                option_info += f' | {t("label_speaker_model", default="Sprecher*innenerkennung:")} {pyannote_model}'
+
             # Create log file
             if not os.path.exists(f'{config_dir}/log'):
                 os.makedirs(f'{config_dir}/log')

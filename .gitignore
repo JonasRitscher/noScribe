@@ -38,3 +38,12 @@ diarize_x86_64_mod_unsigned
 .python-version
 /pyinstaller/win_installer
 /.history-memo
+
+error_report.md
+antigravity_docs/
+
+*.mp3
+!tests/data/interview.mp3
+*.wav
+*.m4a
+noScribeEdit/Test/
