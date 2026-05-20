@@ -123,9 +123,6 @@ Für die einfachere Angabe in wissenschaftlichen Texten schreibt noScribe in den
 ```
 
 ## Unsicherheiten hervorheben
-Im noScribe Editor kann jetzt über den Button Unsicherheiten hervorheben angezeigt werden, bei welchen teilen des Transkriptes whisper nicht ganz sicher war. Die Textstellen werden mit einem Roten Hintergrund markiert. Dafür werden die Informationen der Konfidenz der einzelnen Wörter aus dem json in den head der html Datei geschrieben und im Editor mit den Textstellen in den Dokumenten synchronisiert.
-
-## Unsicherheiten hervorheben
 Im noScribe-Editor können Stellen, bei denen das Whisper-Modell eine geringe Erkennungssicherheit hatte, farblich hervorgehoben werden.
 Die Confidence-Werte werden dafür als JSON-Metadaten im `<head>`-Bereich des HTML-Transkripts abgelegt (`<meta name="word_confidences">`). Dadurch bleibt der eigentliche Textkörper (`<body>`) frei von UI-spezifischen Formatierungen, was die Weiternutzung des Transkriptes in Drittprogrammen erleichtert und man z.B. in MaxQDA nicht immer den Marktieren Text sieht.
 
