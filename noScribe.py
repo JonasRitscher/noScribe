@@ -2653,8 +2653,24 @@ class App(ctk.CTk):
                     prev_speaker = ''
                     last_auto_save = datetime.datetime.now()
 
+                    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+                    # Accumulates word-level confidences mapped by segment anchor names.
+                    word_confidences = {}
+
                     def save_doc():
                         nonlocal last_auto_save
+                        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+                        # Saves the collected word confidences as JSON in a meta tag inside the HTML head.
+                        if word_confidences and job.file_ext == 'html':
+                            import json
+                            meta_tags = d.head.getElementsByName("word_confidences")
+                            meta_tag = meta_tags[0] if meta_tags else None
+                            if not meta_tag:
+                                meta_tag = d.createElement("meta")
+                                meta_tag.name = "word_confidences"
+                                d.head.appendChild(meta_tag)
+                            meta_tag.content = json.dumps(word_confidences)
+
                         txt = ''
                         if job.file_ext == 'html':
                             txt = d.asHTML()
@@ -2797,7 +2813,12 @@ class App(ctk.CTk):
                         # write text to the doc
                         # diarization (speaker detection)?
                         seg_text = segment.text
-                        seg_html = html.escape(seg_text, quote=False)
+                        
+                        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+                        # Generates clean, escaped HTML body text without inline highlight spans.
+                        # Word-level confidences are mapped to the segment anchor in the metadata.
+                        seg_html_base = html.escape(seg_text, quote=False)
+                        seg_html = seg_html_base
 
                         if job.speaker_detection != 'none':
                             new_speaker = find_speaker(diarization, start, end)
@@ -2806,11 +2827,11 @@ class App(ctk.CTk):
                                     prev_speaker = speaker
                                     speaker = new_speaker
                                     seg_text = f' {speaker}:{seg_text}'
-                                    seg_html = html.escape(seg_text, quote=False)                                
+                                    seg_html = f' {html.escape(speaker, quote=False)}:{seg_html_base}'
                                 elif (speaker[:2] == '//') and (new_speaker == prev_speaker): # was overlapping speech and we are returning to the previous speaker 
                                     speaker = new_speaker
                                     seg_text = f'//{seg_text}'
-                                    seg_html = html.escape(seg_text, quote=False)
+                                    seg_html = f'//{seg_html_base}'
                                 else: # new speaker, not overlapping
                                     if speaker[:2] == '//': # was overlapping speech, mark the end
                                         last_elem = p.lastElementChild
@@ -2827,33 +2848,35 @@ class App(ctk.CTk):
                                     speaker = new_speaker
                                     # add timestamp
                                     if job.timestamps:
-                                        seg_html = f'{speaker}: <span style="color: {job.timestamp_color}" >{ts}</span>{html.escape(seg_text, quote=False)}'
+                                        seg_html = f'{speaker}: <span style="color: {job.timestamp_color}" >{ts}</span>{seg_html_base}'
                                         seg_text = f'{speaker}: {ts}{seg_text}'
                                         last_timestamp_ms = start
                                     else:
                                         if job.file_ext != 'vtt': # in vtt files, speaker names are added as special voice tags so skip this here
                                             seg_text = f'{speaker}:{seg_text}'
-                                            seg_html = html.escape(seg_text, quote=False)
+                                            seg_html = f'{html.escape(speaker, quote=False)}:{seg_html_base}'
                                         else:
-                                            seg_html = html.escape(seg_text, quote=False).lstrip()
+                                            seg_html = seg_html_base.lstrip()
                                             seg_text = f'{speaker}:{seg_text}'
                                         
                             else: # same speaker
                                 if job.timestamps:
                                     if (start - last_timestamp_ms) > job.timestamp_interval:
-                                        seg_html = f' <span style=\"color: {job.timestamp_color}\" >{ts}</span>{html.escape(seg_text, quote=False)}'
+                                        seg_html = f' <span style=\"color: {job.timestamp_color}\" >{ts}</span>{seg_html_base}'
                                         seg_text = f' {ts}{seg_text}'
                                         last_timestamp_ms = start
                                     else:
-                                        seg_html = html.escape(seg_text, quote=False)
+                                        seg_html = seg_html_base
+                                else:
+                                    seg_html = seg_html_base
 
                         else: # no speaker detection
                             if job.timestamps and (first_segment or (start - last_timestamp_ms) > job.timestamp_interval):
-                                seg_html = f' <span style=\"color: {job.timestamp_color}\" >{ts}</span>{html.escape(seg_text, quote=False)}'
+                                seg_html = f' <span style=\"color: {job.timestamp_color}\" >{ts}</span>{seg_html_base}'
                                 seg_text = f' {ts}{seg_text}'
                                 last_timestamp_ms = start
                             else:
-                                seg_html = html.escape(seg_text, quote=False)
+                                seg_html = seg_html_base
                             # avoid leading whitespace in first paragraph
                             if first_segment:
                                 seg_text = seg_text.lstrip()
@@ -2863,6 +2886,12 @@ class App(ctk.CTk):
                         a_html = f'<a name=\"ts_{orig_audio_start}_{orig_audio_end}_{speaker}\" >{seg_html}</a>'
                         a = d.createElementFromHTML(a_html)
                         p.appendChild(a)
+
+                        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+                        # Map the segment's anchor name to its word-level probabilities
+                        if segment.words:
+                            anchor_name = f'ts_{orig_audio_start}_{orig_audio_end}_{speaker}'
+                            word_confidences[anchor_name] = [(w.get("word", ""), w.get("prob")) for w in segment.words]
 
                         self.log(seg_text)
                         

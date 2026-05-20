@@ -45,6 +45,16 @@ highlight_color = '#ff8c00'
 default_font = "Arial"
 default_font_size = "12pt"
 
+# AI-Generated helper: Custom QMenu that stays open when checkable actions are clicked
+class CheckableMenu(QtWidgets.QMenu):
+    def mouseReleaseEvent(self, event):
+        action = self.actionAt(event.position().toPoint())
+        if action and action.isCheckable():
+            action.trigger()
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
 # Helper functions
 
 # config
@@ -263,6 +273,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tmp_audio_file = None
         self.keep_playing = False # Stops the play_along-function when set to False 
         
+        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+        # Tracks active confidence threshold levels (75%, 50%, 25%) and word probabilities
+        self.threshold_75_enabled = True
+        self.threshold_50_enabled = True
+        self.threshold_25_enabled = True
+        self.word_confidences = {}
+        
         # Restore stored window geometry
         geom = get_config('window_geometry', None)
         if geom:
@@ -366,15 +383,62 @@ class MainWindow(QtWidgets.QMainWindow):
         self.playback_speed.setToolTip(t('editor.tooltip.playback_speed'))
         self.playback_speed.setStatusTip(t('editor.tooltip.playback_speed'))
         noScribe_toolbar.addWidget(self.playback_speed)
+
+        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+        # Creates a toolbar and menu action to toggle the highlighting of low-confidence words,
+        # along with a threshold selection dropdown.
+        self.highlight_uncertainty_action = QtGui.QAction(qta.icon('mdi.marker', color=icon_color), t('editor.action.highlight_uncertainty'), self)
+        self.highlight_uncertainty_action.setCheckable(True)
+        self.highlight_uncertainty_action.setChecked(True)
+        self.highlight_uncertainty_action.setStatusTip(t('editor.tooltip.highlight_uncertainty'))
+        self.highlight_uncertainty_action.toggled.connect(self.set_highlight_low_confidence)
+        noScribe_toolbar.addAction(self.highlight_uncertainty_action)
+
+        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+        # Create a dropdown menu button for selecting/deselecting individual thresholds.
+        self.threshold_button = QtWidgets.QToolButton(self)
+        self.threshold_button.setText(t('editor.threshold.title'))
+        self.threshold_button.setToolTip(t('editor.threshold.tooltip'))
+        self.threshold_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
+        
+        self.threshold_menu = CheckableMenu(self)
+        
+        def create_color_icon(color_hex):
+            # AI-Generated helper: creates a small color square icon for the menu
+            pixmap = QtGui.QPixmap(16, 16)
+            pixmap.fill(QtGui.QColor(color_hex))
+            return QtGui.QIcon(pixmap)
+            
+        self.action_75 = QtGui.QAction(create_color_icon('#ffe066'), t('editor.threshold.t75'), self)
+        self.action_75.setCheckable(True)
+        self.action_75.setChecked(True)
+        self.action_75.triggered.connect(self.on_threshold_toggled)
+        self.threshold_menu.addAction(self.action_75)
+        
+        self.action_50 = QtGui.QAction(create_color_icon('#ffb74d'), t('editor.threshold.t50'), self)
+        self.action_50.setCheckable(True)
+        self.action_50.setChecked(True)
+        self.action_50.triggered.connect(self.on_threshold_toggled)
+        self.threshold_menu.addAction(self.action_50)
+        
+        self.action_25 = QtGui.QAction(create_color_icon('#ff8a80'), t('editor.threshold.t25'), self)
+        self.action_25.setCheckable(True)
+        self.action_25.setChecked(True)
+        self.action_25.triggered.connect(self.on_threshold_toggled)
+        self.threshold_menu.addAction(self.action_25)
+        
+        self.threshold_button.setMenu(self.threshold_menu)
+        noScribe_toolbar.addWidget(self.threshold_button)
             
         edit_toolbar = QtWidgets.QToolBar(t('editor.menu.edit'))
         edit_toolbar.setMovable(False)
         edit_toolbar.setIconSize(QtCore.QSize(24, 24))
-        edit_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
+        edit_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
         self.addToolBar(edit_toolbar)
         edit_menu = self.menuBar().addMenu(t('editor.menu.edit'))
 
         edit_menu.addAction(self.play_along_action)
+        edit_menu.addAction(self.highlight_uncertainty_action)
         edit_menu.addSeparator()
 
         undo_action = QtGui.QAction(qta.icon('mdi.undo', color=icon_color), t('editor.action.undo'), self)
@@ -658,6 +722,19 @@ class MainWindow(QtWidgets.QMainWindow):
             
             parser = AdvancedHTMLParser.AdvancedHTMLParser()
             parser.parseStr(htmlStr)    
+
+            # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+            # Load the word_confidences metadata from the HTML head.
+            import json
+            meta_tags = parser.head.getElementsByName("word_confidences")
+            confidence_meta = meta_tags[0] if meta_tags else None
+            if confidence_meta:
+                try:
+                    self.word_confidences = json.loads(confidence_meta.content)
+                except Exception:
+                    self.word_confidences = {}
+            else:
+                self.word_confidences = {}
             
             try:       
                 # save timestamps from name to href-attribute because QTextEdit does not handle ankers with only the name-attribute well:
@@ -695,6 +772,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 # AI-Generated Feature: Adjustable Line Spacing
                 # Ensures the document starts with the user-defined line spacing.
                 self.apply_line_spacing()
+
+                # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+                # Applies metadata or scans for inline highlights (backward compatibility).
+                if self.word_confidences:
+                    self.apply_word_confidences()
+                else:
+                    self.backward_compatibility_scan()
 
                 doc.clearUndoRedoStacks()
                 doc.setModified(False)
@@ -769,8 +853,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def _file_save(self, path):
+        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+        # Re-generates confidence metadata from the document and temporarily disables
+        # highlights before generating the HTML output to keep the body clean.
+        self.update_word_confidences_from_doc()
+
+        was_highlighted = self.highlight_uncertainty_action.isChecked()
+        if was_highlighted:
+            self.set_highlight_low_confidence(False)
+
         # Prepare the html:
         htmlStr = self.editor.toHtml()
+
+        if was_highlighted:
+            self.set_highlight_low_confidence(True)
+
         parser = AdvancedHTMLParser.AdvancedHTMLParser()
         parser.parseStr(htmlStr)
         
@@ -785,6 +882,15 @@ class MainWindow(QtWidgets.QMainWindow):
         meta_tag = parser.createElement("meta")
         meta_tag.charset = "UTF-8"
         parser.head.appendChild(meta_tag)
+
+        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+        # Save word confidences as JSON in the HTML head
+        if hasattr(self, 'word_confidences') and self.word_confidences:
+            import json
+            meta_tag = parser.createElement("meta")
+            meta_tag.name = "word_confidences"
+            meta_tag.content = json.dumps(self.word_confidences)
+            parser.head.appendChild(meta_tag)
 
         # add audio file path:
         if self.audio_source:
@@ -1158,6 +1264,270 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.editor.setTextCursor(original_cursor)
 
+    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+    # Helper to calculate appropriate highlight color for a confidence value based on active states.
+    def get_highlight_color(self, prob):
+        if prob < 0.25 and self.threshold_25_enabled:
+            return QtGui.QColor('#ff8a80') # Red
+        elif prob < 0.50 and self.threshold_50_enabled:
+            return QtGui.QColor('#ffb74d') # Orange
+        elif prob < 0.75 and self.threshold_75_enabled:
+            return QtGui.QColor('#ffe066') # Yellow
+        return None
+
+    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+    # Triggered when the user toggles any checkable threshold action.
+    def on_threshold_toggled(self):
+        self.threshold_75_enabled = self.action_75.isChecked()
+        self.threshold_50_enabled = self.action_50.isChecked()
+        self.threshold_25_enabled = self.action_25.isChecked()
+        self.set_highlight_low_confidence(self.highlight_uncertainty_action.isChecked())
+
+    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+    # Applies word confidence properties (10001 and 10002) to the text fragments of the document based on self.word_confidences.
+    def apply_word_confidences(self):
+        doc = self.editor.document()
+        self.editor.blockSignals(True)
+        was_undo_enabled = doc.isUndoRedoEnabled()
+        doc.setUndoRedoEnabled(False)
+        
+        cursor = QtGui.QTextCursor(doc)
+        cursor.beginEditBlock()
+        
+        # Collect all fragments for each anchorHref in the document
+        anchor_fragments = {}  # {href: [(fragment, block)]}
+        block = doc.begin()
+        while block.isValid():
+            iterator = block.begin()
+            while not iterator.atEnd():
+                fragment = iterator.fragment()
+                if fragment.isValid():
+                    char_format = fragment.charFormat()
+                    if char_format.isAnchor():
+                        href = char_format.anchorHref()
+                        if href and href.startswith('ts_'):
+                            if href not in anchor_fragments:
+                                anchor_fragments[href] = []
+                            anchor_fragments[href].append((fragment, block))
+                iterator += 1
+            block = block.next()
+
+        for href, frags in anchor_fragments.items():
+            if href not in self.word_confidences:
+                continue
+            words_meta = self.word_confidences[href]  # List of [word_text, prob]
+            if not words_meta:
+                continue
+            
+            # Reconstruct the full text of the segment from the fragments and trace offsets
+            full_text = ""
+            frag_offsets = []  # [(frag, block, start_pos_in_full_text, end_pos_in_full_text)]
+            for frag, blk in frags:
+                start_offset = len(full_text)
+                full_text += frag.text()
+                end_offset = len(full_text)
+                frag_offsets.append((frag, blk, start_offset, end_offset))
+                
+            current_idx = 0
+            for w_text, w_prob in words_meta:
+                w_search = w_text.strip()
+                if not w_search:
+                    continue
+                pos = full_text.find(w_search, current_idx)
+                if pos != -1:
+                    word_start = pos
+                    word_end = pos + len(w_search)
+                    current_idx = word_end
+                    
+                    # Apply formatting to overlapping fragments
+                    for frag, blk, frag_start, frag_end in frag_offsets:
+                        if word_start < frag_end and word_end > frag_start:
+                            overlap_start = max(word_start, frag_start)
+                            overlap_end = min(word_end, frag_end)
+                            
+                            doc_start = frag.position() + (overlap_start - frag_start)
+                            doc_end = frag.position() + (overlap_end - frag_start)
+                            
+                            cursor.setPosition(doc_start)
+                            cursor.setPosition(doc_end, QtGui.QTextCursor.MoveMode.KeepAnchor)
+                            
+                            char_format = cursor.charFormat()
+                            new_format = QtGui.QTextCharFormat(char_format)
+                            new_format.setProperty(10001, True)
+                            new_format.setProperty(10002, w_prob)
+                            
+                            # Set background color dynamically based on thresholds if highlighting is enabled
+                            color = self.get_highlight_color(w_prob) if self.highlight_uncertainty_action.isChecked() else None
+                            if color:
+                                new_format.setBackground(QtGui.QBrush(color))
+                            else:
+                                new_format.setBackground(QtGui.QBrush(QtGui.QColor(0, 0, 0, 0)))
+                            
+                            cursor.setCharFormat(new_format)
+                            
+        cursor.endEditBlock()
+        doc.setUndoRedoEnabled(was_undo_enabled)
+        self.editor.blockSignals(False)
+
+    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+    # Scans the document for existing inline highlights (spans with background '#ffe6e6')
+    # and populates word properties and self.word_confidences for backward compatibility.
+    def backward_compatibility_scan(self):
+        doc = self.editor.document()
+        self.editor.blockSignals(True)
+        was_undo_enabled = doc.isUndoRedoEnabled()
+        doc.setUndoRedoEnabled(False)
+        
+        cursor = QtGui.QTextCursor(doc)
+        cursor.beginEditBlock()
+        
+        # 1. Collect all fragments by anchor href
+        anchor_fragments = {}  # {href: [(fragment, block)]}
+        block = doc.begin()
+        while block.isValid():
+            iterator = block.begin()
+            while not iterator.atEnd():
+                fragment = iterator.fragment()
+                if fragment.isValid():
+                    char_format = fragment.charFormat()
+                    if char_format.isAnchor():
+                        href = char_format.anchorHref()
+                        if href and href.startswith('ts_'):
+                            if href not in anchor_fragments:
+                                anchor_fragments[href] = []
+                            anchor_fragments[href].append((fragment, block))
+                iterator += 1
+            block = block.next()
+
+        # 2. Process anchors to set properties and build self.word_confidences
+        for href, frags in anchor_fragments.items():
+            words_list = []
+            for frag, blk in frags:
+                char_format = frag.charFormat()
+                bg = char_format.background().color()
+                is_highlighted = (bg.name().lower() == '#ffe6e6') or char_format.property(10001)
+                
+                # Split fragment text into words
+                tokens = re.split(r'(\s+)', frag.text())
+                for token in tokens:
+                    if not token:
+                        continue
+                    if token.strip(): # it's a word
+                        prob = 0.74 if is_highlighted else 1.0
+                        words_list.append((token, prob))
+                        
+                        if is_highlighted:
+                            doc_start = frag.position()
+                            doc_end = frag.position() + frag.length()
+                            cursor.setPosition(doc_start)
+                            cursor.setPosition(doc_end, QtGui.QTextCursor.MoveMode.KeepAnchor)
+                            new_format = QtGui.QTextCharFormat(char_format)
+                            new_format.setProperty(10001, True)
+                            new_format.setProperty(10002, 0.74)
+                            if self.highlight_uncertainty_action.isChecked():
+                                new_format.setBackground(QtGui.QBrush(QtGui.QColor('#ffe6e6')))
+                            else:
+                                new_format.setBackground(QtGui.QBrush(QtGui.QColor(0, 0, 0, 0)))
+                            cursor.setCharFormat(new_format)
+            
+            if words_list:
+                self.word_confidences[href] = words_list
+                
+        cursor.endEditBlock()
+        doc.setUndoRedoEnabled(was_undo_enabled)
+        self.editor.blockSignals(False)
+
+    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+    # Toggles the background color of low-confidence fragments in the editor based on the toggle action status.
+    def set_highlight_low_confidence(self, enabled):
+        """Toggles the background color of low-confidence fragments in the editor"""
+        doc = self.editor.document()
+        self.editor.blockSignals(True)
+        
+        was_modified = doc.isModified()
+        was_undo_enabled = doc.isUndoRedoEnabled()
+        doc.setUndoRedoEnabled(False)
+        
+        cursor = QtGui.QTextCursor(doc)
+        cursor.beginEditBlock()
+        
+        block = doc.begin()
+        while block.isValid():
+            iterator = block.begin()
+            while not iterator.atEnd():
+                fragment = iterator.fragment()
+                if fragment.isValid():
+                    char_format = fragment.charFormat()
+                    if char_format.property(10001):
+                        prob = char_format.property(10002)
+                        # Fallback for old documents: treat as 0.74
+                        if prob is None:
+                            prob = 0.74
+                        new_format = QtGui.QTextCharFormat(char_format)
+                        color = self.get_highlight_color(prob) if enabled else None
+                        if color:
+                            new_format.setBackground(QtGui.QBrush(color))
+                        else:
+                            new_format.setBackground(QtGui.QBrush(QtGui.QColor(0, 0, 0, 0)))
+                        
+                        cursor.setPosition(fragment.position())
+                        cursor.setPosition(fragment.position() + fragment.length(), QtGui.QTextCursor.MoveMode.KeepAnchor)
+                        cursor.setCharFormat(new_format)
+                iterator += 1
+            block = block.next()
+            
+        cursor.endEditBlock()
+        doc.setUndoRedoEnabled(was_undo_enabled)
+        doc.setModified(was_modified)
+        self.editor.blockSignals(False)
+        
+        # Enable or disable the threshold selection button based on the highlight toggle
+        self.threshold_button.setEnabled(enabled)
+
+    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+    # Re-generates self.word_confidences from the actual text fragments and their properties in the document.
+    def update_word_confidences_from_doc(self):
+        doc = self.editor.document()
+        new_confidences = {}
+        
+        # 1. Collect all fragments by anchor href
+        anchor_fragments = {}  # {href: [(fragment, block)]}
+        block = doc.begin()
+        while block.isValid():
+            iterator = block.begin()
+            while not iterator.atEnd():
+                fragment = iterator.fragment()
+                if fragment.isValid():
+                    char_format = fragment.charFormat()
+                    if char_format.isAnchor():
+                        href = char_format.anchorHref()
+                        if href and href.startswith('ts_'):
+                            if href not in anchor_fragments:
+                                anchor_fragments[href] = []
+                            anchor_fragments[href].append((fragment, block))
+                iterator += 1
+            block = block.next()
+
+        # 2. Process anchors to build new metadata dictionary
+        for href, frags in anchor_fragments.items():
+            words_list = []
+            for frag, blk in frags:
+                char_format = frag.charFormat()
+                prob = char_format.property(10002)
+                
+                # Split fragment text into tokens
+                tokens = re.split(r'(\s+)', frag.text())
+                for token in tokens:
+                    if not token:
+                        continue
+                    if token.strip(): # it's a word
+                        token_prob = prob if prob is not None else 1.0
+                        words_list.append((token, token_prob))
+            
+            if words_list:
+                new_confidences[href] = words_list
+                
+        self.word_confidences = new_confidences
 
     # AI-Generated Feature: Custom Dialog Translations
     def custom_msg_box(self, icon, title, text, buttons, default_button):

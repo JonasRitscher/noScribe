@@ -365,3 +365,66 @@ class TestApostropheFix:
         d = self._build_doc_with_text("a < b & c > d")
         txt_out = utils.html_to_text(d.asHTML(), use_only_body=True)
         assert txt_out == "a < b & c > d"
+
+
+def test_uncertainty_highlight_stripping():
+    """
+    Ensure that low-confidence uncertainty spans (<span style="background-color: #ffe6e6;">)
+    are correctly stripped from VTT and TXT outputs.
+    """
+    html_string = """
+    <body>
+        <p>My Title</p>
+        <p>My Information Header</p>
+        <p><a name="ts_0_1000_s1">I <span style="background-color: #ffe6e6;">said</span> something.</a></p>
+    </body>
+    """
+    
+    # Test html_to_text stripping
+    txt_out = utils.html_to_text(html_string, use_only_body=True)
+    assert "said" in txt_out
+    assert "background-color" not in txt_out
+    assert "<span" not in txt_out
+    
+    # Test html_to_webvtt stripping
+    vtt_out = utils.html_to_webvtt(html_string)
+    assert "said" in vtt_out
+    assert "background-color" not in vtt_out
+    assert "<span" not in vtt_out
+
+
+def test_uncertainty_highlight_metadata():
+    """
+    Ensure that we can parse metadata and check that there are no highlight spans
+    in the body when using the new metadata format.
+    """
+    import json
+    
+    # Simulate a document created with the new metadata-based format
+    word_confidences = {
+        "ts_0_1000_s1": [("I", 0.99), ("said", 0.54), ("something.", 0.98)]
+    }
+    
+    # Create HTML document with the metadata tag in the head
+    html_string = f"""
+    <html>
+        <head>
+            <meta name="word_confidences" content='{json.dumps(word_confidences)}' />
+        </head>
+        <body>
+            <p>My Title</p>
+            <p>My Information Header</p>
+            <p><a name="ts_0_1000_s1">I said something.</a></p>
+        </body>
+    </html>
+    """
+    
+    # Test html_to_text: should extract plain text cleanly
+    txt_out = utils.html_to_text(html_string, use_only_body=True)
+    assert "I said something." in txt_out
+    
+    # Test html_to_webvtt: should extract WebVTT format cleanly
+    vtt_out = utils.html_to_webvtt(html_string)
+    assert "I said something." in vtt_out
+    assert "word_confidences" not in vtt_out
+

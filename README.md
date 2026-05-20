@@ -121,3 +121,38 @@ Für die einfachere Angabe in wissenschaftlichen Texten schreibt noScribe in den
                     pass
                 option_info += f' | {t("label_speaker_model", default="Sprecher*innenerkennung:")} {pyannote_model}'
 ```
+
+## Unsicherheiten hervorheben
+Im noScribe Editor kann jetzt über den Button Unsicherheiten hervorheben angezeigt werden, bei welchen teilen des Transkriptes whisper nicht ganz sicher war. Die Textstellen werden mit einem Roten Hintergrund markiert. Dafür werden die Informationen der Konfidenz der einzelnen Wörter aus dem json in den head der html Datei geschrieben und im Editor mit den Textstellen in den Dokumenten synchronisiert.
+
+## Unsicherheiten hervorheben
+Im noScribe-Editor können Stellen, bei denen das Whisper-Modell eine geringe Erkennungssicherheit hatte, farblich hervorgehoben werden.
+Die Confidence-Werte werden dafür als JSON-Metadaten im `<head>`-Bereich des HTML-Transkripts abgelegt (`<meta name="word_confidences">`). Dadurch bleibt der eigentliche Textkörper (`<body>`) frei von UI-spezifischen Formatierungen, was die Weiternutzung des Transkriptes in Drittprogrammen erleichtert und man z.B. in MaxQDA nicht immer den Marktieren Text sieht.
+
+Farbskala im Editor:
+*   **Gelb** (`< 75%`): Geringe Sicherheit
+*   **Orange** (`< 50%`): Sehr geringe Sicherheit
+*   **Rot** (`< 25%`): Sehr unsichere Erkennung
+
+Über das Dropdown-Menü **Schwellenwerte** in der Toolbar des Editors können die einzelnen Stufen an- und abgewählt werden, um gezielt bestimmte Unsicherheitsraten zu sehen. Das Transkript muss natürlich sowieso komplett gegengehört und auf Fehler überprüft werden, aber ich habe gemerkt, dass es mir hilft, statt linear ein zwei Stunden Transkript durch zu gehen zuerst grobe Fehler gezielt auszubessern bzw. am Ende nochmal selektiv nach Fehlern zu suchen. Diese decken sich nicht immer mit niedrigen Confidence-Werten aber oft sind die größten Fehler dort wo whisper nicht ganz sicher war.
+
+```python
+
+                    # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+                    # Accumulates word-level confidences mapped by segment anchor names.
+                    word_confidences = {}
+```
+
+```python
+                        # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
+                        # Saves the collected word confidences as JSON in a meta tag inside the HTML head.
+                        if word_confidences and job.file_ext == 'html':
+                            import json
+                            meta_tags = d.head.getElementsByName("word_confidences")
+                            meta_tag = meta_tags[0] if meta_tags else None
+                            if not meta_tag:
+                                meta_tag = d.createElement("meta")
+                                meta_tag.name = "word_confidences"
+                                d.head.appendChild(meta_tag)
+                            meta_tag.content = json.dumps(word_confidences)
+
