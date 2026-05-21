@@ -1,6 +1,6 @@
 # variabler Zeilenabstand im noScribe Editor, deutsche Übersetzung vom Editor, Ausgabe der genutzen KI Modelle im Export von Scribe, erweiterte Exportoptionen
 
-(englisch (autro translatet below)
+(englisch auto translatet below)
 
 Im noScribe Editor fehlte mir die Möglichkeit den Zeilenabstand bei den Transkripten zu verändern um die Lesbarkeit bei längeren Antworten zu verbessern. Da ich nur über rudimentäre Python Kenntnisse verfüge und kein Informatiker sondern Sozialarbeiter bin, habe ich den Fork mit Gemini 3.1 Pro & 3.5 Flash gecodet. Bisher habe ich die hinzugefügten Funktionen nur unter MacOS 26 auf einem Apple Silicon Rechner getestet, da funktionieren alle beschriebenen Features problemlos.
 
@@ -307,6 +307,9 @@ In Tkinter wird über die `typevariable` ausgewertet, welcher Dateifilter im Dat
 
 Der export in docx ließe sich mit `python-docx` genauso umsetzen, ich habe das aber bewusst ausgelassen um diesem furchtbaren Programm keine weitere Bühne zu geben.
 
+Offen: 
+[ ] **Eigenes Wörterbuch:** Möglichkeit fachspezifische Begriffe oder Eigennamen als eine Art "Wörterbuch" zu hinterlegen, um dem Modell einen Kontext (Prompt) mitzugeben, wodurch die Erkennung dieser Wörter in zukünftigen Transkriptionen verbessert wird. Wäre ggf. Sinnvoll für Projekte in denen häufig wiederkehrende aber spezielle Wörte auftauschen die immer falsch Transkribiert werden.
+
 ---
 
 # Variable line spacing in the noScribe Editor, German translation of the editor, listing of the AI models used in Scribe exports, advanced export options
@@ -362,3 +365,6 @@ In addition to the standard formats HTML, TXT, and VTT, transcripts can be expor
 For exporting as a PDF with line numbers (which, in my opinion, only makes sense if the transcript is intended to be attached directly to a document), I use fpdf2. To ensure that the line numbering works precisely, the text blocks are broken into actual lines via a “dry run” using the fpdf2 layout module. Each physical line is then rendered individually on the page and numbered. This prevents paragraphs or blocks from being counted instead, or line numbers from being split across page breaks.
 In Tkinter, the `typevariable` is used to determine which file filter was selected in the file dialog. This allows the decision regarding line numbers (“with line numbers” vs. “without line numbers”) to be passed directly from the system dialog to the generation logic, without cluttering the main UI with additional checkboxes.
 Exporting to DOCX could be done just as easily with `python-docx`, but I deliberately left that out so as not to give this terrible program any more attention.
+
+Open: 
+[ ] **Custom Dictionary:** The ability to store subject-specific terms or proper nouns in a sort of “dictionary” to provide the model with context (a prompt), thereby improving the recognition of these words in future transcriptions. This could be useful for projects in which frequently recurring but specific words appear that are consistently transcribed incorrectly.
