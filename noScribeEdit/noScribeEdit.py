@@ -943,7 +943,7 @@ class MainWindow(QtWidgets.QMainWindow):
         elif file_ext == 'md':
             file_txt = utils.html_to_markdown(htmlStr)
         elif file_ext == 'odt':
-            file_data = utils.html_to_odt(htmlStr, with_line_numbers=False)
+            file_data = utils.html_to_odt(htmlStr)
         elif file_ext == 'pdf':
             with_lines = '(ohne Zeilennummern)' not in selected_filter
             file_data = utils.html_to_pdf(htmlStr, with_line_numbers=with_lines)

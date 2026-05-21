@@ -2701,7 +2701,7 @@ class App(ctk.CTk):
                         elif job.file_ext == 'md':
                             txt = utils.html_to_markdown(d.asHTML())
                         elif job.file_ext == 'odt':
-                            file_data = utils.html_to_odt(d.asHTML(), with_line_numbers=False)
+                            file_data = utils.html_to_odt(d.asHTML())
                         elif job.file_ext == 'pdf':
                             # Check if the user selected the option without line numbers by looking at config
                             with_lines = '(ohne Zeilennummern)' not in getattr(job, 'file_type_desc', '')

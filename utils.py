@@ -359,22 +359,16 @@ def html_to_markdown(html_string: str) -> str:
 
 # AI-Generated Feature: Extended Export (ODT)
 # Uses odfpy to build a formatted OpenDocument Text document.
-def html_to_odt(html_string: str, with_line_numbers: bool = True) -> bytes:
+def html_to_odt(html_string: str) -> bytes:
     """
     Converts an HTML transcript to an ODT file (returned as bytes).
     """
     import io
     from odf.opendocument import OpenDocumentText
-    from odf.text import P, Span, LinenumberingConfiguration
+    from odf.text import P, Span
     from odf.style import Style, TextProperties, ParagraphProperties
     
     doc = OpenDocumentText()
-    
-    if with_line_numbers:
-        # Enable line numbering configuration for the entire document
-        # Number lines on every paragraph (number-lines="true")
-        ln_config = LinenumberingConfiguration(numberlines="true", numformat="1")
-        doc.styles.addElement(ln_config)
     
     # Create bold and italic styles
     bold_style = Style(name="Bold", family="text")
