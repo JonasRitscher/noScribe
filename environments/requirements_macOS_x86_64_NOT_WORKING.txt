@@ -16,3 +16,6 @@ python-i18n
 PyYAML
 soundfile
 numpy<2
+
+odfpy
+fpdf2

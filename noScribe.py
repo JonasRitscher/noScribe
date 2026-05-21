@@ -397,6 +397,8 @@ class TranscriptionJob:
         
         # Derived properties
         self.file_ext: str = ''
+        # AI-Generated Feature: Extended Export - Stores the user-selected file description from save dialog.
+        self.file_type_desc: str = ''
     
     def set_running(self):
         """Mark job as running and record start time"""
@@ -602,7 +604,8 @@ class TranscriptionQueue:
 def create_transcription_job(audio_file=None, transcript_file=None, start_time=None, stop_time=None,
                            language_name=None, whisper_model_name=None, speaker_detection=None,
                            overlapping=None, timestamps=None, disfluencies=None, pause=None,
-                           cli_mode=False) -> TranscriptionJob:
+                           # AI-Generated Feature: Extended Export - Accepts file_type_desc
+                           cli_mode=False, file_type_desc='') -> TranscriptionJob:
     """Create a TranscriptionJob with all default values
     
     This function handles both CLI and GUI job creation, ensuring all defaults
@@ -615,8 +618,12 @@ def create_transcription_job(audio_file=None, transcript_file=None, start_time=N
     job.transcript_file = transcript_file or ''
     if job.transcript_file:
         job.file_ext = os.path.splitext(job.transcript_file)[1][1:]
-        if not job.file_ext in ['html', 'txt', 'vtt']:
+        # AI-Generated Feature: Extended Export - Added md, odt, pdf to supported formats
+        if not job.file_ext in ['html', 'txt', 'vtt', 'md', 'odt', 'pdf']:
             raise Exception(t('err_unsupported_output_format', file_type=job.file_ext))
+    
+    # AI-Generated Feature: Extended Export
+    job.file_type_desc = file_type_desc
     
     # Time range
     job.start = start_time if start_time is not None else 0
@@ -2087,10 +2094,15 @@ class App(ctk.CTk):
             _initialfile = ''            
         if not ('last_filetype' in config):
             config['last_filetype'] = 'html'
+        # AI-Generated Feature: Extended Export - Added md, odt, pdf file filters to Tkinter filedialog
         filetypes = [
             ('noScribe Transcript','*.html'), 
             ('Text only','*.txt'),
-            ('WebVTT Subtitles (also for EXMARaLDA)', '*.vtt')
+            ('WebVTT Subtitles (also for EXMARaLDA)', '*.vtt'),
+            ('Markdown Dokument', '*.md'),
+            ('OpenDocument Text', '*.odt'),
+            ('PDF Dokument (mit Zeilennummern)', '*.pdf'),
+            ('PDF Dokument (ohne Zeilennummern)', '*.pdf')
         ]
         for i, ft in enumerate(filetypes):
             if ft[1] == f'*.{config["last_filetype"]}':
@@ -2106,18 +2118,22 @@ class App(ctk.CTk):
             else:
                 return
         else:
-            # single audio file, select an output file name
+            # AI-Generated Feature: Extended Export - Retrieve chosen dialog filter type using StringVar
+            self.filetype_var = tk.StringVar(value=config.get('last_filetype_desc', 'noScribe Transcript'))
             fn = tk.filedialog.asksaveasfilename(initialdir=_initialdir, initialfile=_initialfile, 
                                                 filetypes=filetypes, 
-                                                defaultextension=config['last_filetype'])
+                                                defaultextension=config['last_filetype'],
+                                                typevariable=self.filetype_var)
             if fn:
                 file_ext = os.path.splitext(fn)[1][1:].lower()
-                if not file_ext in ['html', 'txt', 'vtt']:
+                if not file_ext in ['html', 'txt', 'vtt', 'md', 'odt', 'pdf']:
                     tk.messagebox.showerror(title='noScribe', message=t('err_unsupported_output_format', file_type=file_ext))
                     return                    
                 self.transcript_files_list = [fn]
                 self.button_transcript_file_name.configure(text=os.path.basename(fn))
                 config['last_filetype'] = file_ext
+                if hasattr(self, 'filetype_var'):
+                    config['last_filetype_desc'] = self.filetype_var.get()
             else:
                 return
         
@@ -2223,7 +2239,9 @@ class App(ctk.CTk):
                 timestamps=self.check_box_timestamps.get(),
                 disfluencies=self.check_box_disfluencies.get(),
                 pause=self.option_menu_pause.get(),  # Pass string value
-                cli_mode=False
+                cli_mode=False,
+                # AI-Generated Feature: Extended Export
+                file_type_desc=config.get('last_filetype_desc', '')
             )
             # Handle VTT format warnings in GUI mode
             if job.file_ext == 'vtt' and (job.pause > 0 or job.overlapping or job.timestamps):
@@ -2672,18 +2690,33 @@ class App(ctk.CTk):
                             meta_tag.content = json.dumps(word_confidences)
 
                         txt = ''
+                        file_data = None
                         if job.file_ext == 'html':
                             txt = d.asHTML()
                         elif job.file_ext == 'txt':
                             txt = utils.html_to_text(d.asHTML(), use_only_body=True)
                         elif job.file_ext == 'vtt':
                             txt = utils.html_to_webvtt(d.asHTML())
+                        # AI-Generated Feature: Extended Export - Handles formatting and file saving for MD, ODT and PDF.
+                        elif job.file_ext == 'md':
+                            txt = utils.html_to_markdown(d.asHTML())
+                        elif job.file_ext == 'odt':
+                            file_data = utils.html_to_odt(d.asHTML(), with_line_numbers=False)
+                        elif job.file_ext == 'pdf':
+                            # Check if the user selected the option without line numbers by looking at config
+                            with_lines = '(ohne Zeilennummern)' not in getattr(job, 'file_type_desc', '')
+                            file_data = utils.html_to_pdf(d.asHTML(), with_line_numbers=with_lines)
                         else:
                             raise TypeError(f'Invalid file type "{job.file_ext}".')
                         try:
                             if txt != '':
                                 with open(job.transcript_file, 'w', encoding="utf-8") as f:
                                     f.write(txt)
+                                    f.flush()
+                                last_auto_save = datetime.datetime.now()
+                            elif file_data is not None:
+                                with open(job.transcript_file, 'wb') as f:
+                                    f.write(file_data)
                                     f.flush()
                                 last_auto_save = datetime.datetime.now()
                         except Exception:

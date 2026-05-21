@@ -249,6 +249,284 @@ def _vtt_escape(txt: str) -> str:
     return txt
 
 
+# AI-Generated Feature: Centralized HTML Parser
+# Extracts structural data (title, info, segments) from the HTML transcript to feed other export formats.
+def parse_transcript_html(html_string: str) -> tuple[str, str, list[dict]]:
+    """
+    Parses an HTML transcript and extracts title, info, and segments.
+    Returns: (title, info, list_of_segments)
+    """
+    class TranscriptHTMLParser(html.parser.HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.body_found = False
+            self.segments = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "body":
+                self.body_found = True
+                return
+
+            if not self.body_found:
+                return
+
+            if tag == "p":
+                self.segments.append({
+                    "text": "",
+                    "speaker": None,
+                    "time_start": None,
+                    "time_end": None,
+                })
+            elif tag == "a" and self.segments:
+                tmp = None
+                for item in attrs:
+                    if item[0] == "name":
+                        tmp = item[1].split("_")
+                if tmp and len(tmp) >= 4:
+                    self.segments[-1]["time_start"] = tmp[1]
+                    self.segments[-1]["time_end"] = tmp[2]
+                    self.segments[-1]["speaker"] = tmp[3]
+
+        def handle_endtag(self, tag):
+            pass
+
+        def handle_data(self, data):
+            if not self.body_found or not self.segments:
+                return
+
+            if not data or data.isspace():
+                return
+
+            if self.segments[-1]["speaker"] and data.strip().replace(":", "") == self.segments[-1]["speaker"]:
+                return
+
+            if REGEX_DETECT_TIMESTAMP.match(data.strip()):
+                return
+
+            if self.segments[-1]["text"] and not self.segments[-1]["text"][-1].isspace():
+                self.segments[-1]["text"] += " "
+
+            self.segments[-1]["text"] += html.unescape(data).strip()
+
+        def get_title(self):
+            return self.segments[0]["text"] if len(self.segments) > 0 else ""
+
+        def get_info(self):
+            return self.segments[1]["text"] if len(self.segments) > 1 else ""
+
+        def get_segments(self):
+            for item in self.segments[2:]:
+                if item["text"] and not item["text"].isspace():
+                    yield item
+
+    parser = TranscriptHTMLParser()
+    parser.feed(html_string)
+    return parser.get_title(), parser.get_info(), list(parser.get_segments())
+
+
+# AI-Generated Feature: Extended Export (Markdown)
+# Formats segments to a markdown string.
+def html_to_markdown(html_string: str) -> str:
+    """
+    Converts an HTML transcript to Markdown format.
+    """
+    title, info, segments = parse_transcript_html(html_string)
+    
+    lines = []
+    if title:
+        lines.append(f"# {title}")
+    if info:
+        lines.append(f"*{info}*")
+        lines.append("---")
+        lines.append("")
+        
+    for item in segments:
+        header = ""
+        if item["speaker"]:
+            header += f"**{item['speaker']}** "
+        
+        if item["time_start"]:
+            start = ms_to_str(int(item["time_start"]))
+            header += f"(*{start}*):"
+        
+        if header:
+            lines.append(header)
+        lines.append(item["text"])
+        lines.append("")
+        
+    return "\n".join(lines)
+
+
+# AI-Generated Feature: Extended Export (ODT)
+# Uses odfpy to build a formatted OpenDocument Text document.
+def html_to_odt(html_string: str, with_line_numbers: bool = True) -> bytes:
+    """
+    Converts an HTML transcript to an ODT file (returned as bytes).
+    """
+    import io
+    from odf.opendocument import OpenDocumentText
+    from odf.text import P, Span, LinenumberingConfiguration
+    from odf.style import Style, TextProperties, ParagraphProperties
+    
+    doc = OpenDocumentText()
+    
+    if with_line_numbers:
+        # Enable line numbering configuration for the entire document
+        # Number lines on every paragraph (number-lines="true")
+        ln_config = LinenumberingConfiguration(numberlines="true", numformat="1")
+        doc.styles.addElement(ln_config)
+    
+    # Create bold and italic styles
+    bold_style = Style(name="Bold", family="text")
+    bold_style.addElement(TextProperties(fontweight="bold"))
+    doc.automaticstyles.addElement(bold_style)
+    
+    italic_style = Style(name="Italic", family="text")
+    italic_style.addElement(TextProperties(fontstyle="italic"))
+    doc.automaticstyles.addElement(italic_style)
+    
+    # Title style
+    title_style = Style(name="TitleStyle", family="paragraph")
+    title_style.addElement(ParagraphProperties(marginbottom="0.5cm"))
+    title_style.addElement(TextProperties(fontweight="bold", fontsize="18pt"))
+    doc.automaticstyles.addElement(title_style)
+    
+    title, info, segments = parse_transcript_html(html_string)
+    
+    if title:
+        doc.text.addElement(P(stylename=title_style, text=title))
+    if info:
+        doc.text.addElement(P(text=info))
+        doc.text.addElement(P(text=""))
+        
+    for item in segments:
+        p = P()
+        if item["speaker"] or item["time_start"]:
+            if item["speaker"]:
+                p.addElement(Span(stylename=bold_style, text=item["speaker"] + " "))
+            if item["time_start"]:
+                start = ms_to_str(int(item["time_start"]))
+                p.addElement(Span(stylename=italic_style, text=f"[{start}] "))
+        p.addElement(Span(text=item["text"]))
+        doc.text.addElement(p)
+        doc.text.addElement(P(text=""))
+        
+    out = io.BytesIO()
+    doc.save(out)
+    return out.getvalue()
+
+
+# AI-Generated Feature: Extended Export (PDF)
+# Uses fpdf2 to output a PDF with custom margins and true physical line numbers.
+def html_to_pdf(html_string: str, with_line_numbers: bool = True) -> bytes:
+    """
+    Converts an HTML transcript to a PDF file (returned as bytes).
+    """
+    from fpdf import FPDF
+    
+    title, info, segments = parse_transcript_html(html_string)
+    
+    def safe_pdf_str(s: str) -> str:
+        if not s:
+            return ""
+        # The character '꞉' (U+A789) is used in noScribe to avoid breaking WebVTT/MAXQDA
+        # But standard PDF fonts don't support it, so we revert it to a standard colon.
+        s = s.replace('꞉', ':')
+        # fpdf2 built-in fonts support windows-1252. Replace unsupported chars to avoid crashes.
+        return s.encode('windows-1252', 'replace').decode('windows-1252')
+        
+    class TranscriptPDF(FPDF):
+        def header(self):
+            self.set_font("helvetica", "B", 14)
+            if hasattr(self, "transcript_title") and self.transcript_title:
+                self.cell(0, 10, safe_pdf_str(self.transcript_title), new_x="LMARGIN", new_y="NEXT", align="L")
+                
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("helvetica", "I", 8)
+            self.cell(0, 10, str(self.page_no()), align="C")
+            
+    pdf = TranscriptPDF()
+    pdf.transcript_title = title
+    pdf.add_page()
+    pdf.set_font("helvetica", size=10)
+    
+    if info:
+        pdf.set_font("helvetica", "I", 9)
+        pdf.multi_cell(0, 5, safe_pdf_str(info))
+        pdf.ln(5)
+    
+    line_counter = 1
+    
+    for item in segments:
+        # Construct header block (Speaker + Time)
+        header_text = ""
+        if item["speaker"]:
+            header_text += item["speaker"] + " "
+        if item["time_start"]:
+            start = ms_to_str(int(item["time_start"]))
+            header_text += f"[{start}] "
+            
+        margin_x = 20 if with_line_numbers else 10
+        
+        # Split header text if present
+        header_lines = []
+        if header_text:
+            pdf.set_x(margin_x)
+            pdf.set_font("helvetica", "B", 11)
+            # Use multi_cell dry_run to split it (usually 1 line, but just in case)
+            header_lines = pdf.multi_cell(0, 6, safe_pdf_str(header_text), dry_run=True, output="LINES")
+            
+        # Split body text
+        body_lines = []
+        if item["text"]:
+            pdf.set_x(margin_x)
+            pdf.set_font("helvetica", "", 11)
+            body_lines = pdf.multi_cell(0, 6, safe_pdf_str(item["text"]), dry_run=True, output="LINES")
+            
+        # Print header lines
+        if header_lines:
+            pdf.set_font("helvetica", "B", 11)
+            for line in header_lines:
+                if pdf.y + 6 > pdf.page_break_trigger:
+                    pdf.add_page()
+                pdf.set_x(margin_x)
+                if with_line_numbers:
+                    pdf.set_font("helvetica", "I", 8)
+                    pdf.set_text_color(150, 150, 150)
+                    pdf.cell(10, 6, str(line_counter))
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font("helvetica", "B", 11)
+                    line_counter += 1
+                pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
+                
+        # Print body lines
+        if body_lines:
+            pdf.set_font("helvetica", "", 11)
+            for line in body_lines:
+                if pdf.y + 6 > pdf.page_break_trigger:
+                    pdf.add_page()
+                pdf.set_x(margin_x)
+                if with_line_numbers:
+                    pdf.set_font("helvetica", "I", 8)
+                    pdf.set_text_color(150, 150, 150)
+                    pdf.cell(10, 6, str(line_counter))
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font("helvetica", "", 11)
+                    line_counter += 1
+                pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
+                
+        # Add an empty line between segments
+        if pdf.y + 4 > pdf.page_break_trigger:
+            pdf.add_page()
+        else:
+            pdf.ln(4)
+            
+    return pdf.output()
+
+
+# AI-Generated Refactored Feature: WebVTT Export
+# Modified to use the new centralized HTML parser.
 def html_to_webvtt(html_string: str) -> str:
     """
     Converts an HTML interview output file to a WebVTT transcript.
@@ -263,109 +541,22 @@ def html_to_webvtt(html_string: str) -> str:
     Returns:
         A string containing the WebVTT transcript.
     """
-
-    # Define the parser class. See
-    # https://stackoverflow.com/questions/14694482/converting-html-to-text-with-python
-    # for more information on this approach.
-    #
-    # TODO: move this function and class to its own module.
-    class MyHTMLParser(html.parser.HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.body_found = False
-            self.segments = []
-
-        def handle_starttag(self, tag, attrs):
-            # Look for body tag.
-            if tag == "body":
-                self.body_found = True
-                return
-
-            # Make sure here that we are in the body.
-            if not self.body_found:
-                return
-
-            if tag == "p":
-                self.segments.append(
-                    {
-                        "text": "",
-                        "speaker": None,
-                        "time_start": None,
-                        "time_end": None,
-                    }
-                )
-            elif tag == "a":
-                tmp = None
-                for item in attrs:
-                    if item[0] == "name":
-                        tmp = item[1].split("_")
-                self.segments[-1]["time_start"] = tmp[1]
-                self.segments[-1]["time_end"] = tmp[2]
-                self.segments[-1]["speaker"] = tmp[3]
-
-        def handle_endtag(self, tag):
-            pass
-
-        def handle_data(self, data):
-            # Use data only in body.
-            if not self.body_found:
-                return
-
-            if not data or data.isspace():
-                return
-
-            # If `data` is the same as speaker, we don't need it in VTT.
-            if data.strip().replace(":", "") == self.segments[-1]["speaker"]:
-                return
-
-            # If `data` is a timestamp, we can omit as well.
-            if REGEX_DETECT_TIMESTAMP.match(data.strip()):
-                return
-
-            if (
-                self.segments[-1]["text"]
-                and not self.segments[-1]["text"][-1].isspace()
-            ):
-                self.segments[-1]["text"] += " "
-
-            self.segments[-1]["text"] += html.unescape(data).strip()
-
-        def get_title(self):
-            # The first paragraph contains the title.
-            return self.segments[0]["text"]
-
-        def get_info(self):
-            # The second paragraph contains the info field (including path).
-            return self.segments[1]["text"]
-
-        def get_segments(self):
-            for item in self.segments[2:]:
-                # Check if text is empty or only whitespace. Skip otherwise.
-                if item["text"] and not item["text"].isspace():
-                    yield item
-
-    parser = MyHTMLParser()
-    parser.feed(html_string)
+    title, info, segments = parse_transcript_html(html_string)
 
     ret = "WEBVTT "
+    ret += _vtt_escape(title) + "\n\n"
+    ret += _vtt_escape("NOTE\n" + info) + "\n\n"
 
-    ret += _vtt_escape(parser.get_title()) + "\n\n"
-    ret += _vtt_escape("NOTE\n" + parser.get_info()) + "\n\n"
-
-    for index, item in enumerate(parser.get_segments()):
-        # Add index.
+    for index, item in enumerate(segments):
         ret += f"{index + 1}\n"
 
-        # Add start time.
         start = _ms_to_webvtt(int(item["time_start"]))
         end = _ms_to_webvtt(int(item["time_end"]))
         ret += f"{start} --> {end}\n"
 
-        # Add speaker if available.
         if item["speaker"]:
             ret += f"<v {item['speaker']}>"
 
-        # Add text.
         ret += _vtt_escape(item["text"])
         ret += "\n\n"
 

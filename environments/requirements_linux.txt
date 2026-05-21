@@ -14,3 +14,6 @@ pyinstaller
 python-i18n
 PyYAML
 soundfile
+
+odfpy
+fpdf2

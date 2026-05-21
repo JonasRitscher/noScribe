@@ -1,6 +1,8 @@
-# variabler Zeilenabstand im noScribe Editor, deutsche Übersetzung vom Editor, Ausgabe der genutzen KI Modelle im Export von Scribe
+# variabler Zeilenabstand im noScribe Editor, deutsche Übersetzung vom Editor, Ausgabe der genutzen KI Modelle im Export von Scribe, erweiterte Exportoptionen
 
-Im noScribe Editor fehlte mir die Möglichkeit den Zeilenabstand bei den Transkripten zu verändern um die Lesbarkeit bei längeren Antworten zu verbessern. Da ich nur über rudimentäre Python Kenntnisse verfüge und kein Informatiker sondern Sozialarbeiter bin, habe ich den Fork mit Gemini 3.1 Pro coden lassen. Ich konnte das Ergebnis nur unter macOS testen, dort funktioniert das Feature mit der Änderung des Zeilenabstandes aber problemlos. Außerdem habe ich den Editor auf deutsch übersetzt, das i18n System funktoiniert nach dem gleichen Prinzip wie im Hauptprogramm.
+(englisch (autro translatet below)
+
+Im noScribe Editor fehlte mir die Möglichkeit den Zeilenabstand bei den Transkripten zu verändern um die Lesbarkeit bei längeren Antworten zu verbessern. Da ich nur über rudimentäre Python Kenntnisse verfüge und kein Informatiker sondern Sozialarbeiter bin, habe ich den Fork mit Gemini 3.1 Pro & 3.5 Flash gecodet. Bisher habe ich die hinzugefügten Funktionen nur unter MacOS 26 auf einem Apple Silicon Rechner getestet, da funktionieren alle beschriebenen Features problemlos.
 
 ## 1. Variabler Zeilenabstand in noScribeEdit
 
@@ -70,7 +72,7 @@ Beim Öffnen einer Datei (`_file_open`) wird nun direkt die Funktion `self.apply
 
 ## 2. Deutsche Übersetzung von noScribeEdit
 
-In `noScribeEdit/`trans liegt die yml Datei in der die übersetzten Begriffe stehen.
+Das i18n System des Editors funktioniert nach dem gleichen Prinzip wie im Hauptprogramm. In `noScribeEdit/`trans liegt die yml Datei in der die übersetzten Begriffe stehen.
 
 - **Fehlerbehebung:** Ein Absturz bei der Anzeige von Hinweisfenstern wurde behoben. PyQt6 unterstützt die Funktion `setButtonText` nicht mehr direkt auf der `QMessageBox`. Es wurde eine angepasste Funktion geschrieben, die die Standard-Buttons (Save, Cancel, etc.) übersetzt
 
@@ -152,4 +154,211 @@ Farbskala im Editor:
                                 meta_tag.name = "word_confidences"
                                 d.head.appendChild(meta_tag)
                             meta_tag.content = json.dumps(word_confidences)
+```
 
+## 4. Erweiterte Exportoptionen
+
+Zusätzlich zu den Standardformaten HTML, TXT und VTT können Transkripte als Markdown, OpenDocument Text und PDF exportiert werden. Beim PDF-Export kann gewählt werden, ob das Dokument mit doer ohne Zeilennummern sein soll. Um die verschiedenen Dateiformate sauber zu befüllen, wurde eine die `utils.py` angepass, die das interne HTML-Transkript in eine strukturierte Segmentliste (Sprecher, Zeitstempel, Text) zerlegt.
+Für den Export als pdf mit Zeilennummern (ist mMn nur Sinnvoll wenn das Transkript direkt als Anhang für ein Dokument gedacht ist) nutze ich fpdf2. Damit die Zeilennummerierung auch wirklich präzise funktioniert, werden die Textblöcke über das Layouting-Modul von `fpdf2` per "Dry Run" in die tatsächlichen Zeilen umgebrochen. Jede physikalische Zeile wird dann einzeln auf die Seite gerendert und nummeriert. Dadurch wird verhindert, dass bloß Absätze/Blöcke gezählt werden oder Zeilennummern über Seitenumbrüche hinweg zerreißen:
+
+```python
+# AI-Generated Feature: Extended Export (PDF)
+# Uses fpdf2 to output a PDF with custom margins and true physical line numbers.
+def html_to_pdf(html_string: str, with_line_numbers: bool = True) -> bytes:
+    """
+    Converts an HTML transcript to a PDF file (returned as bytes).
+    """
+    from fpdf import FPDF
+    
+    title, info, segments = parse_transcript_html(html_string)
+    
+    def safe_pdf_str(s: str) -> str:
+        if not s:
+            return ""
+        # The character '꞉' (U+A789) is used in noScribe to avoid breaking WebVTT/MAXQDA
+        # But standard PDF fonts don't support it, so we revert it to a standard colon.
+        s = s.replace('꞉', ':')
+        # fpdf2 built-in fonts support windows-1252. Replace unsupported chars to avoid crashes.
+        return s.encode('windows-1252', 'replace').decode('windows-1252')
+        
+    class TranscriptPDF(FPDF):
+        def header(self):
+            self.set_font("helvetica", "B", 14)
+            if hasattr(self, "transcript_title") and self.transcript_title:
+                self.cell(0, 10, safe_pdf_str(self.transcript_title), new_x="LMARGIN", new_y="NEXT", align="L")
+                
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("helvetica", "I", 8)
+            self.cell(0, 10, str(self.page_no()), align="C")
+            
+    pdf = TranscriptPDF()
+    pdf.transcript_title = title
+    pdf.add_page()
+    pdf.set_font("helvetica", size=10)
+    
+    if info:
+        pdf.set_font("helvetica", "I", 9)
+        pdf.multi_cell(0, 5, safe_pdf_str(info))
+        pdf.ln(5)
+    
+    line_counter = 1
+    
+    for item in segments:
+        # Construct header block (Speaker + Time)
+        header_text = ""
+        if item["speaker"]:
+            header_text += item["speaker"] + " "
+        if item["time_start"]:
+            start = ms_to_str(int(item["time_start"]))
+            header_text += f"[{start}] "
+            
+        margin_x = 20 if with_line_numbers else 10
+        
+        # Split header text if present
+        header_lines = []
+        if header_text:
+            pdf.set_x(margin_x)
+            pdf.set_font("helvetica", "B", 11)
+            # Use multi_cell dry_run to split it (usually 1 line, but just in case)
+            header_lines = pdf.multi_cell(0, 6, safe_pdf_str(header_text), dry_run=True, output="LINES")
+            
+        # Split body text
+        body_lines = []
+        if item["text"]:
+            pdf.set_x(margin_x)
+            pdf.set_font("helvetica", "", 11)
+            body_lines = pdf.multi_cell(0, 6, safe_pdf_str(item["text"]), dry_run=True, output="LINES")
+            
+        # Print header lines
+        if header_lines:
+            pdf.set_font("helvetica", "B", 11)
+            for line in header_lines:
+                if pdf.y + 6 > pdf.page_break_trigger:
+                    pdf.add_page()
+                pdf.set_x(margin_x)
+                if with_line_numbers:
+                    pdf.set_font("helvetica", "I", 8)
+                    pdf.set_text_color(150, 150, 150)
+                    pdf.cell(10, 6, str(line_counter))
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font("helvetica", "B", 11)
+                    line_counter += 1
+                pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
+                
+        # Print body lines
+        if body_lines:
+            pdf.set_font("helvetica", "", 11)
+            for line in body_lines:
+                if pdf.y + 6 > pdf.page_break_trigger:
+                    pdf.add_page()
+                pdf.set_x(margin_x)
+                if with_line_numbers:
+                    pdf.set_font("helvetica", "I", 8)
+                    pdf.set_text_color(150, 150, 150)
+                    pdf.cell(10, 6, str(line_counter))
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font("helvetica", "", 11)
+                    line_counter += 1
+                pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
+                
+        # Add an empty line between segments
+        if pdf.y + 4 > pdf.page_break_trigger:
+            pdf.add_page()
+        else:
+            pdf.ln(4)
+            
+    return pdf.output()
+```
+
+In Tkinter wird über die `typevariable` ausgewertet, welcher Dateifilter im Dateidialog angeklickt wurde. Dadurch kann die Entscheidung über die Zeilennummern ("mit Zeilennummern" vs. "ohne Zeilennummern") direkt aus dem Systemdialog an die Generierungslogik übergeben werden, ohne das Haupt-UI durch zusätzliche Checkboxen zu überladen.
+
+```python
+        # AI-Generated Feature: Extended Export - Added md, odt, pdf file filters to Tkinter filedialog
+        filetypes = [
+            ('noScribe Transcript','*.html'), 
+            ('Text only','*.txt'),
+            ('WebVTT Subtitles (also for EXMARaLDA)', '*.vtt'),
+            ('Markdown Dokument', '*.md'),
+            ('OpenDocument Text', '*.odt'),
+            ('PDF Dokument (mit Zeilennummern)', '*.pdf'),
+            ('PDF Dokument (ohne Zeilennummern)', '*.pdf')
+        ]
+```
+
+```python
+            # AI-Generated Feature: Extended Export - Retrieve chosen dialog filter type using StringVar
+            self.filetype_var = tk.StringVar(value=config.get('last_filetype_desc', 'noScribe Transcript'))
+            fn = tk.filedialog.asksaveasfilename(initialdir=_initialdir, initialfile=_initialfile, 
+                                                filetypes=filetypes, 
+                                                defaultextension=config['last_filetype'],
+                                                typevariable=self.filetype_var)
+            if fn:
+                file_ext = os.path.splitext(fn)[1][1:].lower()
+                if not file_ext in ['html', 'txt', 'vtt', 'md', 'odt', 'pdf']:
+                    tk.messagebox.showerror(title='noScribe', message=t('err_unsupported_output_format', file_type=file_ext))
+                    return                    
+                self.transcript_files_list = [fn]
+                self.button_transcript_file_name.configure(text=os.path.basename(fn))
+                config['last_filetype'] = file_ext
+                if hasattr(self, 'filetype_var'):
+                    config['last_filetype_desc'] = self.filetype_var.get()
+```
+
+Der export in docx ließe sich mit `python-docx` genauso umsetzen, ich habe das aber bewusst ausgelassen um diesem furchtbaren Programm keine weitere Bühne zu geben.
+
+---
+
+# Variable line spacing in the noScribe Editor, German translation of the editor, listing of the AI models used in Scribe exports, advanced export options
+
+In the noScribe Editor, I missed the ability to adjust the line spacing in transcripts to improve readability for longer responses. Since I only have basic knowledge of Python and am a social worker rather than a computer scientist, I coded the fork using Gemini 3.1 Pro & 3.5 Flash. So far, I’ve only tested the added features on a MacOS 26 machine with Apple Silicon, where all the described features work without any issues.
+
+## 1. Variable Line Spacing in noScribeEdit
+
+### 1. Menu and Toolbar
+
+To adjust the line spacing, there are two new buttons (as `QAction` objects) in the menu bar.
+
+* **Increase Line Spacing:** Uses the icon `mdi.arrow-expand-vertical`
+* **Decrease Line Spacing:** Uses the icon `mdi.arrow-collapse-vertical`
+
+### 2. Logik-Funktionen (10%-Schritte & Prozentuale Berechnung)
+
+Der Zeilenabstand lässt sich in 10% Schritten ändern, feinere Einstellungen fand ich zu langsam um eine angenehme größe zu finden und gröbere zu ungenau. Der Standardabstand (100%) ist als Basiswert im Config-Manager definiert, und das System schützt vor extremen Werten (Grenzen: 100% Minimum bis 250% Maximum). Dadurch wird  der Text nie enger wird als der ursprüngliche Standard, aber lässt sich angenehm "auseinanderziehen".
+
+**Die Proportionale Berechnung (Bugfix):** Anfänglich wurde fälschlicherweise der Modus `4` (`QTextBlockFormat::LineDistanceHeight`) an PyQt6 übergeben. Dies fügte dem Standard-Abstand feste Pixelwerte hinzu, weshalb sich die Abstände extrem vergrößert hatten. Dies wurde zu `1` (`QTextBlockFormat::ProportionalHeight`) korrigiert. Die `1` sorgt dafür, dass PyQt6 die übergebene Zahl (z.B. 150) als Prozentwert des Standardzeilenabstands interpretiert (also in diesem Fall 1.5-facher Abstand).
+
+### 3. Loading Logic
+
+When a file is opened (`_file_open`), the function `self.apply_line_spacing()` is now called immediately. This ensures that the preferred line spacing is applied right away, before the undo system is initialized.
+
+## 2. German Translation of noScribeEdit
+
+The editor's i18n system works on the same principle as in the main program. The YML file containing the translated terms is located in `noScribeEdit/trans`.
+
+- **Bug Fix:** A crash that occurred when displaying message boxes has been fixed. PyQt6 no longer supports the `setButtonText` function directly on the `QMessageBox`. A custom function has been written to translate the standard buttons (Save, Cancel, etc.).
+
+## 3. Output of the AI models used in the export
+
+To facilitate citation in scientific texts, noScribe includes in the HTML header which AI models were used for speaker recognition and transcription:
+
+- **Whisper model:** The name of the Whisper model used (e.g., `large-v3-turbo`) is read from the folder (e.g., `models/precise/README.md`) and inserted into the transcript.
+- **Pyannote model:** The speaker recognition version is extracted from the first line of `pyannote/README.md` and inserted into the transcript.
+
+## Highlighting Uncertainties
+In the noScribe editor, passages where the Whisper model had low recognition confidence can be highlighted in color.
+The confidence values are stored as JSON metadata in the `<head>` section of the HTML transcript (`<meta name="word_confidences">`). This keeps the actual text body (`<body>`) free of UI-specific formatting, which facilitates the reuse of the transcript in third-party programs and ensures that, for example, the highlighted text is not always visible in MaxQDA.
+
+Color scale in the editor:
+*   **Yellow** (`< 75%`): Low confidence
+*   **Orange** (`< 50%`): Very low confidence
+*   **Red** (`< 25%`): Very uncertain recognition
+
+Using the **Thresholds** dropdown menu in the editor toolbar, you can select or deselect individual levels to specifically view certain uncertainty rates. Of course, the transcript still needs to be listened to in its entirety and checked for errors, but I’ve found that instead of going through a two-hour transcript line by line, it helps me to first correct major errors systematically or to search for errors selectively at the end. These don’t always correspond to low confidence values, but often the biggest errors are where Whisper wasn’t entirely sure.
+
+## 4. Advanced Export Options
+
+In addition to the standard formats HTML, TXT, and VTT, transcripts can be exported as Markdown, OpenDocument Text, and PDF. When exporting to PDF, you can choose whether the document should include line numbers or not. To properly populate the various file formats, the `utils.py` script was modified to break down the internal HTML transcript into a structured segment list (speaker, timestamp, text).
+For exporting as a PDF with line numbers (which, in my opinion, only makes sense if the transcript is intended to be attached directly to a document), I use fpdf2. To ensure that the line numbering works precisely, the text blocks are broken into actual lines via a “dry run” using the fpdf2 layout module. Each physical line is then rendered individually on the page and numbered. This prevents paragraphs or blocks from being counted instead, or line numbers from being split across page breaks.
+In Tkinter, the `typevariable` is used to determine which file filter was selected in the file dialog. This allows the decision regarding line numbers (“with line numbers” vs. “without line numbers”) to be passed directly from the system dialog to the generation logic, without cluttering the main UI with additional checkboxes.
+Exporting to DOCX could be done just as easily with `python-docx`, but I deliberately left that out so as not to give this terrible program any more attention.

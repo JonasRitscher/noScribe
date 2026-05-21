@@ -25,6 +25,9 @@ import platform
 
 import os
 import sys
+# AI-Generated Refactoring: Appends parent directory path to import the utils module
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import utils
 import shlex
 import subprocess
 from datetime import datetime
@@ -852,7 +855,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._file_open(path)
 
 
-    def _file_save(self, path):
+    # AI-Generated Feature: Extended Export - Save function signature modified to accept the selected filter format.
+    def _file_save(self, path, selected_filter=""):
         # AI-Generated Feature: Uncertainty Highlighting (Unsicherheitsmarkierung)
         # Re-generates confidence metadata from the document and temporarily disables
         # highlights before generating the HTML output to keep the body clean.
@@ -927,22 +931,31 @@ class MainWindow(QtWidgets.QMainWindow):
             htmlStr = htmlStr.replace('\n\n', '\n')
         
         file_ext = os.path.splitext(path)[1][1:]
+        file_data = None
         if file_ext == 'html':
             file_txt = htmlStr
         elif file_ext == 'txt':
-            d = AdvancedHTMLParser.AdvancedHTMLParser()
-            d.parseStr(htmlStr)
-            file_txt = html_to_text(d)
+            file_txt = utils.html_to_text(htmlStr, use_only_body=True)
         elif file_ext == 'vtt':
-            d = AdvancedHTMLParser.AdvancedHTMLParser()
-            d.parseStr(htmlStr)
             media_path = self.audio_source if self.audio_source is not None else ''
-            file_txt = html_to_webvtt(d, media_path)
+            file_txt = utils.html_to_webvtt(htmlStr, media_path)
+        # AI-Generated Feature: Extended Export - Format handling for MD, ODT and PDF.
+        elif file_ext == 'md':
+            file_txt = utils.html_to_markdown(htmlStr)
+        elif file_ext == 'odt':
+            file_data = utils.html_to_odt(htmlStr, with_line_numbers=False)
+        elif file_ext == 'pdf':
+            with_lines = '(ohne Zeilennummern)' not in selected_filter
+            file_data = utils.html_to_pdf(htmlStr, with_line_numbers=with_lines)
         else:
             raise TypeError(f'Invalid file type "{file_ext}".')
 
-        with open(path, 'w', encoding="utf-8") as f:
-            f.write(file_txt)
+        if file_data is not None:
+            with open(path, 'wb') as f:
+                f.write(file_data)
+        else:
+            with open(path, 'w', encoding="utf-8") as f:
+                f.write(file_txt)
             
         if file_ext == 'html':
             self.editor.document().setModified(False)
@@ -962,18 +975,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self.dialog_critical(str(e))
 
     def file_saveas(self):
+        # AI-Generated Feature: Extended Export - Added md, odt, pdf formats to the save dialog
         filter_string = (
             "noScribe Transcript (*.html);;"
             "Text only (*.txt);;"
-            "WebVTT Subtitles (also for EXMARaLDA) (*.vtt)"
+            "WebVTT Subtitles (also for EXMARaLDA) (*.vtt);;"
+            "Markdown Dokument (*.md);;"
+            "OpenDocument Text (*.odt);;"
+            "PDF Dokument (mit Zeilennummern) (*.pdf);;"
+            "PDF Dokument (ohne Zeilennummern) (*.pdf)"
         )
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+        path, selected_filter = QtWidgets.QFileDialog.getSaveFileName(
             None, "Save file", self.path, filter_string, "noScribe Transcript (*.html)"
         )
         if path == "": # canceled
             return
         try:
-            self._file_save(path)
+            self._file_save(path, selected_filter)
         except Exception as e:
             self.dialog_critical(str(e))
                     
