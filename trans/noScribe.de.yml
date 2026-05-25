@@ -44,6 +44,10 @@ de:
   label_pause: 'Pausen markieren:'
   label_timestamps: 'Zeitmarken:'
   label_disfluencies: 'Füllworte:'
+  label_custom_dictionary: 'Eigenes Wörterbuch:'
+  button_custom_dictionary: 'Wörterbuch bearbeiten...'
+  dialog_custom_dictionary_title: 'Eigenes Wörterbuch bearbeiten'
+  dialog_custom_dictionary_desc: 'Tragen Sie Fachbegriffe oder Eigennamen komma-separiert ein, die Whisper häufig falsch schreibt (Empfohlen: max. 30 Wörter).'
 
   start_button: Start
   start_queue: 'Auftrag jetzt starten'

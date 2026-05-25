@@ -45,6 +45,10 @@ en:
   label_pause: 'Mark pause:'
   label_timestamps: 'Timestamps:'
   label_disfluencies: 'Disfluencies:'
+  label_custom_dictionary: 'Custom Dictionary:'
+  button_custom_dictionary: 'Edit Dictionary...'
+  dialog_custom_dictionary_title: 'Edit Custom Dictionary'
+  dialog_custom_dictionary_desc: 'Enter important proper nouns or technical terms, separated by commas, that Whisper often misinterprets (Recommended: max. 30 words).'
   
   start_button: Start 
   start_queue: 'Start job now'

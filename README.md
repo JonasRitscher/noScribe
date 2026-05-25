@@ -74,13 +74,13 @@ Beim Öffnen einer Datei (`_file_open`) wird nun direkt die Funktion `self.apply
 
 Das i18n System des Editors funktioniert nach dem gleichen Prinzip wie im Hauptprogramm. In `noScribeEdit/`trans liegt die yml Datei in der die übersetzten Begriffe stehen.
 
-- **Fehlerbehebung:** Ein Absturz bei der Anzeige von Hinweisfenstern wurde behoben. PyQt6 unterstützt die Funktion `setButtonText` nicht mehr direkt auf der `QMessageBox`. Es wurde eine angepasste Funktion geschrieben, die die Standard-Buttons (Save, Cancel, etc.) übersetzt
+* **Fehlerbehebung:** Ein Absturz bei der Anzeige von Hinweisfenstern wurde behoben. PyQt6 unterstützt die Funktion `setButtonText` nicht mehr direkt auf der `QMessageBox`. Es wurde eine angepasste Funktion geschrieben, die die Standard-Buttons (Save, Cancel, etc.) übersetzt
 
 ## 3. Ausgabe der genutzten KI Modelle im Export
 
 Für die einfachere Angabe in wissenschaftlichen Texten schreibt noScribe in den Header von der html rein, welche KI Modelle für Sprecher*innenerkennung und Transkription genutzt wurden:
 
-- **Whisper-Modell:** Die Bezeichnung des genutzten Whisper-Modells (z. B. `large-v3-turbo`) wird ausgelesen aus dem Ordner z. B. `models/precise/README.md` und in das Transkript eingefügt.
+* **Whisper-Modell:** Die Bezeichnung des genutzten Whisper-Modells (z. B. `large-v3-turbo`) wird ausgelesen aus dem Ordner z. B. `models/precise/README.md` und in das Transkript eingefügt.
 
 ```python
             # AI-Generated Feature: Output AI Models
@@ -105,7 +105,7 @@ Für die einfachere Angabe in wissenschaftlichen Texten schreibt noScribe in den
             option_info += f' | {t("label_whisper_model", default="Transkriptionsmodell:")} {whisper_model_disp}'
 ```
 
-- **Pyannote-Modell:** Die Version der Sprechererkennung wird aus der ersten Zeile der `pyannote/README.md` extrahiert und in das Transkript eingefügt.
+* **Pyannote-Modell:** Die Version der Sprechererkennung wird aus der ersten Zeile der `pyannote/README.md` extrahiert und in das Transkript eingefügt.
 
 ```python
             # Pyannote Model Extraction
@@ -125,13 +125,15 @@ Für die einfachere Angabe in wissenschaftlichen Texten schreibt noScribe in den
 ```
 
 ## Unsicherheiten hervorheben
+
 Im noScribe-Editor können Stellen, bei denen das Whisper-Modell eine geringe Erkennungssicherheit hatte, farblich hervorgehoben werden.
 Die Confidence-Werte werden dafür als JSON-Metadaten im `<head>`-Bereich des HTML-Transkripts abgelegt (`<meta name="word_confidences">`). Dadurch bleibt der eigentliche Textkörper (`<body>`) frei von UI-spezifischen Formatierungen, was die Weiternutzung des Transkriptes in Drittprogrammen erleichtert und man z.B. in MaxQDA nicht immer den Marktieren Text sieht.
 
 Farbskala im Editor:
-*   **Gelb** (`< 75%`): Geringe Sicherheit
-*   **Orange** (`< 50%`): Sehr geringe Sicherheit
-*   **Rot** (`< 25%`): Sehr unsichere Erkennung
+
+* **Gelb** (`< 75%`): Geringe Sicherheit
+* **Orange** (`< 50%`): Sehr geringe Sicherheit
+* **Rot** (`< 25%`): Sehr unsichere Erkennung
 
 Über das Dropdown-Menü **Schwellenwerte** in der Toolbar des Editors können die einzelnen Stufen an- und abgewählt werden, um gezielt bestimmte Unsicherheitsraten zu sehen. Das Transkript muss natürlich sowieso komplett gegengehört und auf Fehler überprüft werden, aber ich habe gemerkt, dass es mir hilft, statt linear ein zwei Stunden Transkript durch zu gehen zuerst grobe Fehler gezielt auszubessern bzw. am Ende nochmal selektiv nach Fehlern zu suchen. Diese decken sich nicht immer mit niedrigen Confidence-Werten aber oft sind die größten Fehler dort wo whisper nicht ganz sicher war.
 
@@ -307,8 +309,45 @@ In Tkinter wird über die `typevariable` ausgewertet, welcher Dateifilter im Dat
 
 Der export in docx ließe sich mit `python-docx` genauso umsetzen, ich habe das aber bewusst ausgelassen um diesem furchtbaren Programm keine weitere Bühne zu geben.
 
-Offen: 
-[ ] **Eigenes Wörterbuch:** Möglichkeit fachspezifische Begriffe oder Eigennamen als eine Art "Wörterbuch" zu hinterlegen, um dem Modell einen Kontext (Prompt) mitzugeben, wodurch die Erkennung dieser Wörter in zukünftigen Transkriptionen verbessert wird. Wäre ggf. Sinnvoll für Projekte in denen häufig wiederkehrende aber spezielle Wörte auftauschen die immer falsch Transkribiert werden.
+## 5. Eigenes Wörterbuch
+
+Möglichkeit fachspezifische Begriffe oder Eigennamen als eine Art "Wörterbuch" zu hinterlegen, um dem Modell einen Kontext (Prompt) mitzugeben, wodurch die Erkennung dieser Wörter in zukünftigen Transkriptionen verbessert wird. Wäre ggf. Sinnvoll für Projekte in denen häufig wiederkehrende aber spezielle Wörte auftauschen die immer falsch Transkribiert werden.
+
+### Benutzeroberfläche & Konfiguration
+
+In der Optionen-Sidebar von noScribe gibt es einen neuen Button `"Wörterbuch bearbeiten..."`. Dieser öffnet ein modales Eingabefeld zur komma-separierten Eingabe von Begriffen. Die Liste wird global in der `config.yml` unter `custom_dictionary` gespeichert.
+
+### Technische Umsetzung & Prompt-Kombination
+
+Da `faster-whisper` einen `hotwords`-Parameter im `transcribe`-Aufruf unterstützt, haben wir eine Hilfsfunktion in `utils.py` implementiert, die den Standard-Füllwort-Prompt sauber mit den benutzerdefinierten Begriffen verbindet:
+
+```python
+# AI-Generated Feature: Custom Dictionary support
+# Combines the default language prompt/hotwords with custom dictionary terms.
+def combine_prompt_and_dictionary(prompt: str, custom_dictionary: str) -> str:
+    prompt = (prompt or "").strip()
+    custom_dict = (custom_dictionary or "").strip()
+    if custom_dict:
+        if prompt:
+            return prompt.rstrip(".,?!") + ", " + custom_dict
+        else:
+            return custom_dict
+    return prompt
+```
+
+Im Worker-Subprozess (`whisper_mp_worker.py`) wird diese Funktion aufgerufen, um das Wörterbuch in die Transkription einzuspeisen:
+
+```python
+        # AI-Generated Feature: Custom Dictionary support
+        custom_dict = args.get("custom_dictionary", "").strip()
+        prompt = combine_prompt_and_dictionary(prompt, custom_dict)
+        
+        segments, info = model.transcribe(
+            ...
+            hotwords=prompt,
+            ...
+        )
+```
 
 ---
 
@@ -339,23 +378,25 @@ When a file is opened (`_file_open`), the function `self.apply_line_spacing()` i
 
 The editor's i18n system works on the same principle as in the main program. The YML file containing the translated terms is located in `noScribeEdit/trans`.
 
-- **Bug Fix:** A crash that occurred when displaying message boxes has been fixed. PyQt6 no longer supports the `setButtonText` function directly on the `QMessageBox`. A custom function has been written to translate the standard buttons (Save, Cancel, etc.).
+* **Bug Fix:** A crash that occurred when displaying message boxes has been fixed. PyQt6 no longer supports the `setButtonText` function directly on the `QMessageBox`. A custom function has been written to translate the standard buttons (Save, Cancel, etc.).
 
 ## 3. Output of the AI models used in the export
 
 To facilitate citation in scientific texts, noScribe includes in the HTML header which AI models were used for speaker recognition and transcription:
 
-- **Whisper model:** The name of the Whisper model used (e.g., `large-v3-turbo`) is read from the folder (e.g., `models/precise/README.md`) and inserted into the transcript.
-- **Pyannote model:** The speaker recognition version is extracted from the first line of `pyannote/README.md` and inserted into the transcript.
+* **Whisper model:** The name of the Whisper model used (e.g., `large-v3-turbo`) is read from the folder (e.g., `models/precise/README.md`) and inserted into the transcript.
+* **Pyannote model:** The speaker recognition version is extracted from the first line of `pyannote/README.md` and inserted into the transcript.
 
 ## Highlighting Uncertainties
+
 In the noScribe editor, passages where the Whisper model had low recognition confidence can be highlighted in color.
 The confidence values are stored as JSON metadata in the `<head>` section of the HTML transcript (`<meta name="word_confidences">`). This keeps the actual text body (`<body>`) free of UI-specific formatting, which facilitates the reuse of the transcript in third-party programs and ensures that, for example, the highlighted text is not always visible in MaxQDA.
 
 Color scale in the editor:
-*   **Yellow** (`< 75%`): Low confidence
-*   **Orange** (`< 50%`): Very low confidence
-*   **Red** (`< 25%`): Very uncertain recognition
+
+* **Yellow** (`< 75%`): Low confidence
+* **Orange** (`< 50%`): Very low confidence
+* **Red** (`< 25%`): Very uncertain recognition
 
 Using the **Thresholds** dropdown menu in the editor toolbar, you can select or deselect individual levels to specifically view certain uncertainty rates. Of course, the transcript still needs to be listened to in its entirety and checked for errors, but I’ve found that instead of going through a two-hour transcript line by line, it helps me to first correct major errors systematically or to search for errors selectively at the end. These don’t always correspond to low confidence values, but often the biggest errors are where Whisper wasn’t entirely sure.
 
@@ -366,5 +407,42 @@ For exporting as a PDF with line numbers (which, in my opinion, only makes sense
 In Tkinter, the `typevariable` is used to determine which file filter was selected in the file dialog. This allows the decision regarding line numbers (“with line numbers” vs. “without line numbers”) to be passed directly from the system dialog to the generation logic, without cluttering the main UI with additional checkboxes.
 Exporting to DOCX could be done just as easily with `python-docx`, but I deliberately left that out so as not to give this terrible program any more attention.
 
-Open: 
-[ ] **Custom Dictionary:** The ability to store subject-specific terms or proper nouns in a sort of “dictionary” to provide the model with context (a prompt), thereby improving the recognition of these words in future transcriptions. This could be useful for projects in which frequently recurring but specific words appear that are consistently transcribed incorrectly.
+## 5. Custom Dictionary
+
+This feature allows users to globally define proper nouns, acronyms, and domain-specific terms in the noScribe options sidebar. These terms are passed to the Whisper model as hotwords, improving their recognition rate during transcription.
+
+### User Interface & Configuration
+
+In the noScribe options sidebar, there is a new button `"Edit Dictionary..."`. Clicking it opens a modal input box to enter comma-separated terms. This list is stored globally in `config.yml` under the key `custom_dictionary`.
+
+### Technical Implementation & Prompt Combination
+
+Because `faster-whisper` supports a `hotwords` parameter in its `transcribe` call, we implemented a helper function in `utils.py` that cleanly merges the default disfluency prompt with the custom dictionary terms:
+
+```python
+# AI-Generated Feature: Custom Dictionary support
+# Combines the default language prompt/hotwords with custom dictionary terms.
+def combine_prompt_and_dictionary(prompt: str, custom_dictionary: str) -> str:
+    prompt = (prompt or "").strip()
+    custom_dict = (custom_dictionary or "").strip()
+    if custom_dict:
+        if prompt:
+            return prompt.rstrip(".,?!") + ", " + custom_dict
+        else:
+            return custom_dict
+    return prompt
+```
+
+In the multiprocessing worker (`whisper_mp_worker.py`), this function is invoked to feed the dictionary into the Whisper pipeline:
+
+```python
+        # AI-Generated Feature: Custom Dictionary support
+        custom_dict = args.get("custom_dictionary", "").strip()
+        prompt = combine_prompt_and_dictionary(prompt, custom_dict)
+        
+        segments, info = model.transcribe(
+            ...
+            hotwords=prompt,
+            ...
+        )
+```

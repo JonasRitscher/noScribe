@@ -555,3 +555,16 @@ def html_to_webvtt(html_string: str) -> str:
         ret += "\n\n"
 
     return ret
+
+
+# AI-Generated Feature: Custom Dictionary support
+# Combines the default language prompt/hotwords with custom dictionary terms.
+def combine_prompt_and_dictionary(prompt: str, custom_dictionary: str) -> str:
+    prompt = (prompt or "").strip()
+    custom_dict = (custom_dictionary or "").strip()
+    if custom_dict:
+        if prompt:
+            return prompt.rstrip(".,?!") + ", " + custom_dict
+        else:
+            return custom_dict
+    return prompt

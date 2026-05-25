@@ -23,6 +23,7 @@ def whisper_proc_entrypoint(args: dict, q):
         import torch
         import yaml
         import i18n
+        from utils import combine_prompt_and_dictionary
 
         def plog(level, msg):
             try:
@@ -126,6 +127,11 @@ def whisper_proc_entrypoint(args: dict, q):
         except Exception:
             log_cb('error', t('err_loading_prompt') + '\n')
             prompt = ""
+
+        # AI-Generated Feature: Custom Dictionary support
+        # Combine user's custom vocabulary with the filler-word prompt (hotwords) using the helper function
+        custom_dict = args.get("custom_dictionary", "").strip()
+        prompt = combine_prompt_and_dictionary(prompt, custom_dict)
 
         # Perform transcription (streaming)
         segments, info = model.transcribe(

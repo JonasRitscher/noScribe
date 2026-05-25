@@ -383,6 +383,8 @@ class TranscriptionJob:
         self.timestamps: bool = False
         self.disfluencies: bool = True
         self.pause: int = 0  # index value (0=none, 1=1sec+, etc.)
+        # AI-Generated Feature: Custom Dictionary support
+        self.custom_dictionary: str = ''
         
         # Config-based options
         self.whisper_beam_size: int = 1
@@ -672,6 +674,8 @@ def create_transcription_job(audio_file=None, transcript_file=None, start_time=N
     job.timestamp_color = get_config('timestamp_color', '#78909C')
     job.pause_marker = get_config('pause_seconds_marker', '.')
     job.auto_save = False if get_config('auto_save', 'True') == 'False' else True
+    # AI-Generated Feature: Custom Dictionary support
+    job.custom_dictionary = get_config('custom_dictionary', '')
         
     job.vad_threshold = float(get_config('voice_activity_detection_threshold', '0.5'))
     
@@ -977,7 +981,17 @@ def _init_app_state(app):
     app._mp_proc = None
     app._mp_queue = None
     app._ffmpeg_proc = None
-    app._shutting_down = False
+# AI-Generated Feature: Custom Input Dialog with prefilled text support
+# Subclasses CTkInputDialog to safely prefill the input entry without race conditions.
+class CTkPrefilledInputDialog(ctk.CTkInputDialog):
+    def __init__(self, *args, initial_value: str = "", **kwargs):
+        self.initial_value = initial_value
+        super().__init__(*args, **kwargs)
+
+    def _create_widgets(self):
+        super()._create_widgets()
+        if self.initial_value:
+            self._entry.insert(0, self.initial_value)
 
 
 class App(ctk.CTk):
@@ -1205,6 +1219,13 @@ class App(ctk.CTk):
             self.check_box_timestamps.select()
         else:
             self.check_box_timestamps.deselect()
+
+        # AI-Generated Feature: Custom Dictionary UI
+        self.label_custom_dictionary = ctk.CTkLabel(self.frame_options, text=t('label_custom_dictionary'))
+        self.label_custom_dictionary.grid(column=0, row=9, sticky='w', pady=5)
+
+        self.button_custom_dictionary = ctk.CTkButton(self.frame_options, text=t('button_custom_dictionary'), width=100, command=self.button_custom_dictionary_event)
+        self.button_custom_dictionary.grid(column=1, row=9, sticky='e', pady=5)
         
         # Start control: single CTkOptionMenu styled like a button
         # Create a container so we can show/hide as one control
@@ -2063,6 +2084,19 @@ class App(ctk.CTk):
         for fn in self.transcript_files_list:
             log_msg += f'\n{fn}'
         self.logn(log_msg)
+
+    # AI-Generated Feature: Custom Dictionary button callback
+    def button_custom_dictionary_event(self):
+        current_dict = config.get('custom_dictionary', '')
+        dialog = CTkPrefilledInputDialog(
+            text=t('dialog_custom_dictionary_desc'),
+            title=t('dialog_custom_dictionary_title'),
+            initial_value=current_dict
+        )
+        value = dialog.get_input()
+        if value is not None:
+            config['custom_dictionary'] = value.strip()
+            save_config()
 
     def button_audio_file_event(self):
         fn = tk.filedialog.askopenfilename(initialdir=os.path.dirname(self.audio_files_list[0] if len(self.audio_files_list) > 0 else ''), 
@@ -3099,6 +3133,7 @@ class App(ctk.CTk):
             "language_name": job.language_name,
             "language_code": language_code,
             "disfluencies": job.disfluencies,
+            "custom_dictionary": job.custom_dictionary,
             "beam_size": 5,
             "word_timestamps": True,
             "vad_filter": True,

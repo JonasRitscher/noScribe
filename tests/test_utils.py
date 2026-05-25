@@ -428,3 +428,25 @@ def test_uncertainty_highlight_metadata():
     assert "I said something." in vtt_out
     assert "word_confidences" not in vtt_out
 
+
+# AI-Generated Feature: Custom Dictionary support
+# Tests that the prompt and custom dictionary are combined correctly.
+def test_combine_prompt_and_dictionary():
+    # Case 1: Both prompt and custom dictionary are empty or None
+    assert utils.combine_prompt_and_dictionary("", "") == ""
+    assert utils.combine_prompt_and_dictionary(None, None) == ""
+
+    # Case 2: Only custom dictionary is provided
+    assert utils.combine_prompt_and_dictionary("", "noScribe, PyQt6") == "noScribe, PyQt6"
+    assert utils.combine_prompt_and_dictionary(None, "noScribe") == "noScribe"
+
+    # Case 3: Only prompt is provided
+    assert utils.combine_prompt_and_dictionary("Äh, das ist, es ist, ähm.", "") == "Äh, das ist, es ist, ähm."
+    assert utils.combine_prompt_and_dictionary("Uhm, okay.", None) == "Uhm, okay."
+
+    # Case 4: Both are provided (combining with trailing punctuation stripping)
+    assert utils.combine_prompt_and_dictionary("Äh, das ist, es ist, ähm.", "noScribe, PyQt6") == "Äh, das ist, es ist, ähm, noScribe, PyQt6"
+    assert utils.combine_prompt_and_dictionary("Äh, das ist, es ist, ähm!", "noScribe") == "Äh, das ist, es ist, ähm, noScribe"
+    assert utils.combine_prompt_and_dictionary("Äh, das ist, es ist, ähm?", "noScribe") == "Äh, das ist, es ist, ähm, noScribe"
+    assert utils.combine_prompt_and_dictionary("Äh, das ist, es ist, ähm", "noScribe") == "Äh, das ist, es ist, ähm, noScribe"
+
