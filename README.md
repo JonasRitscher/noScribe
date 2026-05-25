@@ -311,15 +311,8 @@ Der export in docx ließe sich mit `python-docx` genauso umsetzen, ich habe das 
 
 ## 5. Eigenes Wörterbuch
 
-Möglichkeit fachspezifische Begriffe oder Eigennamen als eine Art "Wörterbuch" zu hinterlegen, um dem Modell einen Kontext (Prompt) mitzugeben, wodurch die Erkennung dieser Wörter in zukünftigen Transkriptionen verbessert wird. Wäre ggf. Sinnvoll für Projekte in denen häufig wiederkehrende aber spezielle Wörte auftauschen die immer falsch Transkribiert werden.
-
-### Benutzeroberfläche & Konfiguration
-
-In der Optionen-Sidebar von noScribe gibt es einen neuen Button `"Wörterbuch bearbeiten..."`. Dieser öffnet ein modales Eingabefeld zur komma-separierten Eingabe von Begriffen. Die Liste wird global in der `config.yml` unter `custom_dictionary` gespeichert.
-
-### Technische Umsetzung & Prompt-Kombination
-
-Da `faster-whisper` einen `hotwords`-Parameter im `transcribe`-Aufruf unterstützt, haben wir eine Hilfsfunktion in `utils.py` implementiert, die den Standard-Füllwort-Prompt sauber mit den benutzerdefinierten Begriffen verbindet:
+Möglichkeit fachspezifische Begriffe oder Eigennamen als eine Art "Wörterbuch" zu hinterlegen, um dem Modell einen Kontext (Prompt) mitzugeben, wodurch die Erkennung dieser Wörter in zukünftigen Transkriptionen verbessert wird. Wäre ggf. Sinnvoll für Projekte in denen häufig wiederkehrende aber spezielle Wörte auftauschen die immer falsch Transkribiert werden. Die Qualität schwankt allerdings stark. Bei Eigennamen ist die Wahrscheinlichkeit das es hilft recht hoch, bei Fachbegriffen allerdings deutlich geringer.
+In der Optionen-Sidebar von noScribe gibt es einen neuen Button `"Wörterbuch bearbeiten..."`. Dieser öffnet ein modales Eingabefeld zur komma-separierten Eingabe von Begriffen. Die Liste wird global in der `config.yml` unter `custom_dictionary` gespeichert. Da `faster-whisper` einen `hotwords`-Parameter im `transcribe`-Aufruf unterstützt, wurde eine Hilfsfunktion in `utils.py` implementiert, die den Standard-Füllwort-Prompt sauber mit den benutzerdefinierten Begriffen verbindet:
 
 ```python
 # AI-Generated Feature: Custom Dictionary support
@@ -409,15 +402,8 @@ Exporting to DOCX could be done just as easily with `python-docx`, but I deliber
 
 ## 5. Custom Dictionary
 
-This feature allows users to globally define proper nouns, acronyms, and domain-specific terms in the noScribe options sidebar. These terms are passed to the Whisper model as hotwords, improving their recognition rate during transcription.
-
-### User Interface & Configuration
-
-In the noScribe options sidebar, there is a new button `"Edit Dictionary..."`. Clicking it opens a modal input box to enter comma-separated terms. This list is stored globally in `config.yml` under the key `custom_dictionary`.
-
-### Technical Implementation & Prompt Combination
-
-Because `faster-whisper` supports a `hotwords` parameter in its `transcribe` call, we implemented a helper function in `utils.py` that cleanly merges the default disfluency prompt with the custom dictionary terms:
+ThThe ability to store subject-specific terms or proper nouns in a sort of “dictionary” to provide the model with context (a prompt), thereby improving the recognition of these words in future transcriptions. This could be useful for projects where frequently recurring but specialized words consistently appear and are transcribed incorrectly. However, the quality varies greatly. For proper nouns, the likelihood that this will help is quite high, but for technical terms, it is significantly lower.
+In the noScribe options sidebar, there is a new button labeled `“Edit Dictionary...”`. This opens a modal input field for entering terms separated by commas. The list is stored globally in `config.yml` under `custom_dictionary`. Since `faster-whisper` supports a `hotwords` parameter in the `transcribe` call, a helper function has been implemented in `utils.py` that neatly combines the standard fill-in-the-blank prompt with the user-defined terms:
 
 ```python
 # AI-Generated Feature: Custom Dictionary support
